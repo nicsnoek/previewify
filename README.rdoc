@@ -1,0 +1,85 @@
+= previewify
+
+In your model:
+
+  class BlogPost < AR::B
+    previewify :preview_only_methods => [:published_versions_by, :default_title],
+                :live_only_methods => [:cache]
+
+    named_scope :old, :conditions => { :updated_at < 2.days.ago }
+    named_scope :naughty, :conditions => ['body LIKE "%nipple%"']
+
+    validates_presence_of :title # both preview and published
+    validate :drafts_allowed, :if => :draft?
+    validates_uniqueness_of :slug, :if => :published?
+
+    def self.default_title
+    end
+
+    def title
+    end
+
+    def published_versions_by(user)
+    end
+
+    def cache
+    end
+  end
+
+  BlogPost.last.published_versions.by(user)
+
+In your controller:
+
+  class ApplicationController
+    previewify :if => :preview_url?
+
+    def preview_url?
+      request.host.match(/preview/)
+    end
+  end
+
+  class BlogPostsController < ApplicationController
+
+    before_filter :load_blog_post, :only => [:show]
+    before_filter :load_blog_post_draft, :only => [:edit, :update]
+
+    def show
+    end
+
+    def update
+      if @blog_post_draft.update_attributes(params[:blog_post_draft])
+        if @blog_post_draft.published?
+          redirect_to blog_post_url(@blog_post_draft)
+        else
+          redirect_to edit_blog_post_url(@blog_post_draft)
+        end
+      else
+        render 'edit'
+      end
+    end
+
+    private
+
+    def load_blog_post_draft
+      @blog_post_draft = BlogPost.find(params[:id])
+    end
+
+    def load_blog_post
+      @blog_post = BlogPost.previewify.find(params[:id]) # works on live or preview
+    end
+  end
+
+  == Contributing to previewify
+ 
+* Check out the latest master to make sure the feature hasn't been implemented or the bug hasn't been fixed yet
+* Check out the issue tracker to make sure someone already hasn't requested it and/or contributed it
+* Fork the project
+* Start a feature/bugfix branch
+* Commit and push until you are happy with your contribution
+* Make sure to add tests for it. This is important so I don't break it in a future version unintentionally.
+* Please try not to mess with the Rakefile, version, or history. If you want to have your own version, or is otherwise necessary, that is fine, but please isolate to its own commit so I can cherry-pick around it.
+
+== Copyright
+
+Copyright (c) 2010 Gregory McIntyre. See LICENSE.txt for
+further details.
