@@ -1,10 +1,92 @@
-= previewify
+== Previewify
+
+Previewify is a Ruby on Rails gem designed to make previewing editable content as simple and seamless as possible. It does this through a mixture of controller filters (to determine when to show the preview version) and model methods (allowing you to save draft versions and then publish them).
+
+The Previewify gem was built for use with a CMS where a user wants to save a draft version they are working on and then published that version once it is ready. Along with this a complete history of published versions will be saved so you can revert back to a previously published version at any time.
+
+Previewify borrows some aspects from acts_as_versioned but with Previewify you only ever have one saved draft version along with a saved history of published versions. With acts_as_versioned you get a new saved version every time you modify an object.
+
+== Getting started
+
+  gem install previewify
+  
+In the model you want to be previewable add the call to previewify.
+
+  class BlogPost < ActiveRecord::Base
+    previewify
+  end
+  
+In order to get started with Previewify you need to create a migration to generate the table that will store your published versions. By default the table name will be the name of your model with 'Publishes' appended to the name eg: BlogPostPublishes
+
+  class BlogPostPublishes < ActiveRecord::Migration
+    def self.up
+      BlogPost.create_published_table
+    end
+  
+    def self.down
+      BlogPost.drop_published_table
+    end
+  end
+  
+Run the new migrations (be sure to run against your test database as well)
+
+  rake db:migrate
+
+== Usage
+
+Previewify requires that you add code to both your controllers and your models. The code in your controllers is used to determine whether to display the preview versions or a published versions of your previewable objects. The model code determines how you interact with your draft and published versions
+
+=== Model
+
+In some instances you may need some methods to only be available from you published instances of your object, you can specify methods to only be available on published objects like this:
+
+  previewify :published_only_methods => [:cache]
+  
+Similarly you can specify methods that will only be available on a draft version of an object:
+
+  previewify :draft_only_methods => [:published_versions_by, :default_title]
+  
+Previewify also adds the draft? and published? methods to your objects which allows you to perform actions only on when needed:
+
+  validates_uniqueness_of :drafts_allowed, :if => :draft?
+  validates_uniqueness_of :slug, :if => :published?
+  
+Once you have a draft version and you are happy with it you can call publish! on that object to make it the currently published version.
+
+  blog_post = BlogPost.find(1)
+  blog_post.publish!
+  
+  blog_post = BlogPost.find(1)
+  blog_post.revert_draft_to!(4)
+  
+=== Controller
+
+Unlike other versioning gems Previewify uses controller filters to determine whether is should be showing a preview or the published version of your content. This allows you to easily write a filter so your preview will only be shown:
+
+  * When a certain subdomain is set. eg: preview.example.com
+  * When a user is logged in to an admin area.
+  * A certain parameter is set in the URL. eg: example.com?preview=true
+  
+Inside you controller (ideally your ApplicationController) you add the following before filter.
+
+  before_filter :show_preview :if => :preview_url?
+
+You can then create a method in the controller that will determine if the preview or published version should be shown:
+
+  def preview_url?
+    request.host.match(/preview/)
+  end
+
+If the preview_url? method returns true then when you retrieve a previewable object it will return the draft version that is saved. When preview_url? returns false the latest published version will be returned.
+
+
+== Example
 
 In your model:
 
   class BlogPost < ActiveRecord::Base
-    previewify :preview_only_methods => [:published_versions_by, :default_title],
-               :live_only_methods => [:cache]
+    previewify :draft_only_methods => [:published_versions_by, :default_title],
+               :published_only_methods => [:cache]
 
     named_scope :old, :conditions => { :updated_at < 2.days.ago }
     named_scope :naughty, :conditions => ['body LIKE "%nipple%"']
@@ -31,7 +113,7 @@ In your model:
 In your controller:
 
   class ApplicationController
-    previewify :if => :preview_url?
+    before_filter :show_preview :if => :preview_url?
 
     def preview_url?
       request.host.match(/preview/)
