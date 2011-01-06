@@ -1,0 +1,6 @@
+test:
+  adapter: mysql
+  database: previewify_test
+  username: root
+  password:
+  host: localhost
