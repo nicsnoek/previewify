@@ -4,11 +4,12 @@ module ActiveRecord
   module Previewify
 
     def previewify(options = {})
+      @options = options
       'Consider youself previewified'
     end
 
     def published_version_table_name
-      "#{self.table_name}_published_versions"
+      @options[:published_versions_table_name] || "#{self.table_name}_published_versions"
     end
 
     def create_published_versions_table

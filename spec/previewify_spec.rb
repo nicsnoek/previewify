@@ -11,77 +11,95 @@ require 'db/schema'
 describe 'Previewify' do
 
 
-  context "with previewified class" do
+  class TestModel < ActiveRecord::Base
+    previewify
+  end
 
-    class TestModel < ActiveRecord::Base
-      previewify
+  def previewified_with_defaults
+    @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_models_published_versions')
+  end
 
-    end
+  def previewified_with_table_name
+    TestModel.previewify(:published_versions_table_name => 'live_test_models')
+    @published_test_model_table = PublishedTestModelTable.new(TestModel, 'live_test_models')
+  end
 
-    describe ".create_published_versions_table" do
+  ['previewified_with_defaults', 'previewified_with_table_name'].each do |config|
+    context "behaviour for #{config}" do
 
-      it "creates published version table if it does not exist" do
-        PublishedTestModelTable.drop
-        PublishedTestModelTable.should_not be_in_existence
-        TestModel.create_published_versions_table
-        PublishedTestModelTable.should be_in_existence
+      before :all do
+        eval(config)
       end
 
-      context "creates a published version table that" do
+      describe ".create_published_versions_table" do
 
-        before :all do
-          PublishedTestModelTable.create
+        it "creates published version table if it does not exist" do
+          @published_test_model_table.drop
+          @published_test_model_table.should_not be_in_existence
+          TestModel.create_published_versions_table
+          @published_test_model_table.should be_in_existence
         end
 
-        it "has an integer version column by default" do
-          PublishedTestModelTable.should have_column("version", :integer)
-        end
+        context "creates a published version table that" do
 
-        it "has all columns that the draft version has by default" do
-          TestModel.columns.each do |column|
-            PublishedTestModelTable.should have_column(column.name)
-            PublishedTestModelTable.column_type(column.name).should == column.type
-
+          before :all do
+            @published_test_model_table.create
           end
+
+          it "has an integer version column by default" do
+            @published_test_model_table.should have_column("version", :integer)
+          end
+
+          it "has all columns that the draft version has by default" do
+            TestModel.columns.each do |column|
+              @published_test_model_table.should have_column(column.name)
+              @published_test_model_table.column_type(column.name).should == column.type
+
+            end
+          end
+
+
         end
-
-
       end
-    end
 
-    describe ".drop_published_versions_table" do
+      describe ".drop_published_versions_table" do
 
-      it "drops published version table if it exists" do
-        PublishedTestModelTable.create
-        PublishedTestModelTable.should be_in_existence
-        TestModel.drop_published_versions_table
-        PublishedTestModelTable.should_not be_in_existence
+        it "drops published version table if it exists" do
+          @published_test_model_table.create
+          @published_test_model_table.should be_in_existence
+          TestModel.drop_published_versions_table
+          @published_test_model_table.should_not be_in_existence
+        end
       end
     end
   end
 
+
   class PublishedTestModelTable
 
-    PUBLISHED_TABLE_NAME = 'test_models_published_versions'
-
-    def self.in_existence?
-      TestModel.connection.tables.include?(PUBLISHED_TABLE_NAME)
+    def initialize(model_class, published_versions_table_name)
+      @model_class = model_class
+      @published_versions_table_name = published_versions_table_name
     end
 
-    def self.drop
-      TestModel.connection.execute("drop table #{PUBLISHED_TABLE_NAME};") if in_existence?
+    def in_existence?
+      @model_class.connection.tables.include?(@published_versions_table_name)
     end
 
-    def self.create
-      TestModel.create_published_versions_table if !in_existence?
+    def drop
+      @model_class.connection.execute("drop table #{@published_versions_table_name};") if in_existence?
     end
 
-    def self.has_column?(name, type = nil)
-      TestModel.connection.column_exists?(PUBLISHED_TABLE_NAME, name, type)
+    def create
+      @model_class.create_published_versions_table if !in_existence?
     end
 
-    def self.column_type(name)
-      TestModel.columns_hash[name].type
+    def has_column?(name, type = nil)
+      @model_class.connection.column_exists?(@published_versions_table_name, name, type)
+    end
+
+    def column_type(name)
+      @model_class.columns_hash[name].type
     end
 
   end
