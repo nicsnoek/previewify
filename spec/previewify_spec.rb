@@ -7,6 +7,8 @@ ActiveRecord::Base.establish_connection('test')
 
 require 'db/schema'
 
+include Previewify::Control
+
 
 describe 'Previewify' do
 
@@ -15,20 +17,10 @@ describe 'Previewify' do
     previewify
   end
 
-  def previewified_with_defaults
-    @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_models_published_versions')
-  end
-
-  def previewified_with_table_name
-    TestModel.previewify(:published_versions_table_name => 'live_test_models')
-    @published_test_model_table = PublishedTestModelTable.new(TestModel, 'live_test_models')
-  end
-
-  ['previewified_with_defaults', 'previewified_with_table_name'].each do |config|
-    context "behaviour for #{config}" do
+    context "behaviour for previewified" do
 
       before :all do
-        eval(config)
+        @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_model_published_versions')
       end
 
       describe ".create_published_versions_table" do
@@ -48,6 +40,10 @@ describe 'Previewify' do
 
           it "has an integer version column by default" do
             @published_test_model_table.should have_column("version", :integer)
+          end
+
+          it "has an published_id column by default" do
+            @published_test_model_table.should have_column("published_id", :integer)
           end
 
           it "has all columns that the draft version has by default" do
@@ -70,6 +66,104 @@ describe 'Previewify' do
           TestModel.drop_published_versions_table
           @published_test_model_table.should_not be_in_existence
         end
+      end
+
+      describe "#publish!" do
+
+        before :all do
+          @published_test_model_table.create
+        end
+
+        it "creates a published version of the object with same attributes as preview object and initial version" do
+          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          published_model = model.publish!
+          published_model.version.should == 1
+          model.attribute_names.each do |attribute_name|
+            published_model.send(attribute_name).should == model.send(attribute_name)
+          end
+        end
+
+        it "creates a published version of the object with same attributes as preview object and increased version number" do
+          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model.publish!
+
+          model.update_attributes(:name => 'Other Name', :number => 55)
+          published_model = model.publish!
+
+          published_model.version.should == 2
+          model.attribute_names.each do |attribute_name|
+            published_model.send(attribute_name).should == model.send(attribute_name)
+          end
+        end
+
+      end
+
+      describe "#take_down" do
+        before :all do
+          @published_test_model_table.create
+        end
+
+        it "returns nil but does not raise exception if object is not published" do
+          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model.take_down!.should be_nil
+        end
+
+        it "returns taken down object and resets 'latest' flag on currently published object" do
+          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model.publish!
+          taken_down = model.take_down!
+          taken_down.latest.should be_false
+        end
+
+      end
+
+      describe ".find" do
+
+        context "in preview mode" do
+
+          before :each do
+            show_preview(true)
+          end
+
+          it "finds preview version" do
+            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            TestModel.find(model.id).should == model
+          end
+        end
+
+        context "in live mode" do
+
+          before :each do
+            show_preview(false)
+          end
+
+
+          it "does not find preview version" do
+            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            lambda {
+              TestModel.find(model.id)
+            }.should raise_error ActiveRecord::RecordNotFound
+          end
+
+          it "finds published version with matching id" do
+            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            model.publish!
+            published_model = TestModel.find(model.id)
+            published_model.id.should == model.id
+          end
+
+          it "does not find preview version or published version when item is taken down" do
+            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            model.publish!
+            model.take_down!
+            lambda {
+              TestModel.find(model.id)
+            }.should raise_error ActiveRecord::RecordNotFound
+          end
+
+        end
+
+
       end
     end
   end
@@ -103,4 +197,3 @@ describe 'Previewify' do
     end
 
   end
-end
