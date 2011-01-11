@@ -1,5 +1,4 @@
 require 'active_record'
-require 'active_support/core_ext/module/aliasing'
 
 module Previewify
 
@@ -38,7 +37,22 @@ module Previewify
           self.class.published_version_class.take_down(id)
         end
 
+        def revert_to_version!(version_number)
+          version = self.class.published_version_class.specific_version_by_primary_key(id, version_number)
+          update_attributes!(published_attributes(version))
+        end
+
         private
+
+        def published_attributes(version)
+          version.attributes.reject{|attribute_name|
+            [
+              self.class.published_version_primary_key_attribute_name,
+              self.class.version_attribute_name,
+              self.class.published_flag_attribute_name
+            ].include?(attribute_name)
+          }
+        end
 
         def self.show_preview?
           Thread.current['Previewify::show_preview'] || false
@@ -107,7 +121,11 @@ module Previewify
       const_set(published_version_class_name, Class.new(::ActiveRecord::Base)).class_eval do
 
         named_scope :latest_published, lambda { |primary_key_value|
-          { :conditions => ["#{published_flag_attribute_name} = true AND #{primary_key_attribute_name} = ?", primary_key_value] }
+          { :conditions => ["#{primary_key_attribute_name} = ? AND #{published_flag_attribute_name} = true", primary_key_value] }
+        }
+
+        named_scope :version, lambda { |primary_key_value, version_number|
+          { :conditions => ["#{primary_key_attribute_name} = ? AND #{version_attribute_name} = ?", primary_key_value, version_number] }
         }
 
         cattr_accessor :published_flag_attribute_name
@@ -127,6 +145,10 @@ module Previewify
 
         def self.latest_published_by_primary_key(primary_key_value)
           latest_published(primary_key_value)[0]
+        end
+
+        def self.specific_version_by_primary_key(primary_key_value, version_number)
+          version(primary_key_value, version_number)[0]
         end
 
         def self.take_down(id_to_take_down)

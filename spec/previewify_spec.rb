@@ -17,7 +17,7 @@ describe 'Previewify' do
     previewify
   end
 
-    context "behaviour for previewified" do
+    context "behaviour for default previewified" do
 
       before :all do
         @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_model_published_versions')
@@ -27,8 +27,7 @@ describe 'Previewify' do
 
         before :each do
           @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-          @model.publish!
-          @published_model = TestModel.find(@model.id)
+          @published_model = @model.publish!
         end
 
         it "can not have its original attributes modified" do
@@ -52,7 +51,7 @@ describe 'Previewify' do
           retrieved_published_model.version.should == original_version_number
         end
 
-        it "can by taken down by calling take_down!" do
+        it "#take_down! makes published version inaccessible" do
           @published_model.take_down!
 
           show_preview(false)
@@ -60,7 +59,17 @@ describe 'Previewify' do
             TestModel.find(@model.id)
           }.should raise_error ActiveRecord::RecordNotFound
         end
+
+        describe ".specific_version_by_primary_key" do
+
+          it "returns specified version" do
+            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model
+          end
+
+        end
+
       end
+
 
       describe ".create_published_versions_table" do
 
@@ -89,7 +98,6 @@ describe 'Previewify' do
             TestModel.columns.each do |column|
               @published_test_model_table.should have_column(column.name)
               @published_test_model_table.column_type(column.name).should == column.type
-
             end
           end
 
@@ -202,6 +210,21 @@ describe 'Previewify' do
 
         end
 
+
+      end
+
+      describe "#revert_to_version" do
+
+        it "reverts preview to specified version" do
+          model = TestModel.create!(:name => 'My Name', :number => 10, :content => 'At least a litre', :float => 5.6, :active => false)
+          model.publish!  #version 1
+          model.number = 20
+          model.publish!  #version 2
+          model.revert_to_version!(1)
+          model.number.should == 10
+          model.revert_to_version!(2)
+          model.number.should == 20
+        end
 
       end
     end
