@@ -15,26 +15,27 @@ module Previewify
 
     def self.included(target)
 
+      # These methods are added to the previewified class:
       target.class_eval do
-        def self.find_published(*args)
-          published_version = eval("#{self.published_class_name}.latest_published.find_by_id(*args)")
-          raise ::ActiveRecord::RecordNotFound unless published_version.present?
-          published_version
+
+        def self.find_latest_published(*args)
+          latest_published = published_version_class.latest_published_by_primary_key(*args)
+          raise ::ActiveRecord::RecordNotFound unless latest_published.present?
+          latest_published
         end
 
         def self.find(*args)
-          self.show_preview? ? super(*args) : self.find_published(*args)
+          show_preview? ? super(*args) : find_latest_published(*args)
         end
 
         def publish!
-          latest_published = self.take_down!
+          latest_published = take_down!
           latest_published_version = latest_published.try(:version) || 0
-          eval("#{self.class.published_class_name}.create(self.attributes.merge(:version => latest_published_version + 1))")
+          self.class.published_version_class.create(attributes.merge(self.class.version_attribute_name => latest_published_version + 1))
         end
 
         def take_down!
-          p "Taking down live version with id #{id}"
-          eval("#{self.class.published_class_name}.take_down(id)")
+          self.class.published_version_class.take_down(id)
         end
 
         private
@@ -54,61 +55,96 @@ module Previewify
     def previewify(options = {})
       @options = options
 
-      # Create the dynamic versioned model
-      #
+      # These will be configurable from the options:
 
       def published_version_table_name
-        "#{self.table_name.singularize}_published_versions"
+        "#{table_name.singularize}_published_versions"
       end
 
-      def published_class_name
+      def published_version_class_name
         "PublishedVersion"
       end
 
-      const_set(published_class_name, Class.new(::ActiveRecord::Base)).class_eval do
+      def published_flag_attribute_name
+        'latest'
+      end
 
-        named_scope :latest_published, :conditions => ['latest = true']
+      def version_attribute_name
+        'version'
+      end
+
+      def published_version_primary_key_attribute_name
+        'published_id'
+      end
+
+      def primary_key_attribute_name
+        'id'
+      end
+
+      def published_columns
+        columns
+      end
+
+      ################################################
+
+       def create_published_versions_table
+        connection.create_table(published_version_table_name, :primary_key => published_version_primary_key_attribute_name) do |t|
+          t.column version_attribute_name, :integer
+          t.column published_flag_attribute_name, :boolean
+        end
+        published_columns.each do |published_column|
+          connection.add_column published_version_table_name, published_column.name, published_column.type,
+                                     :limit     => published_column.limit,
+                                     :scale     => published_column.scale,
+                                     :precision => published_column.precision
+          end
+      end
+
+      def drop_published_versions_table
+        connection.drop_table(published_version_table_name)
+      end
+
+      const_set(published_version_class_name, Class.new(::ActiveRecord::Base)).class_eval do
+
+        named_scope :latest_published, lambda { |primary_key_value|
+          { :conditions => ["#{published_flag_attribute_name} = true AND #{primary_key_attribute_name} = ?", primary_key_value] }
+        }
+
+        cattr_accessor :published_flag_attribute_name
 
         def initialize(attributes)
           super
           self.latest = true
           attributes.each do |key, value|
             self[key] = value
+            self.class.attr_readonly(key)
           end
         end
 
+        def take_down!
+          update_attribute(published_flag_attribute_name, false)
+        end
+
+        def self.latest_published_by_primary_key(primary_key_value)
+          latest_published(primary_key_value)[0]
+        end
+
         def self.take_down(id_to_take_down)
-          #Change this to bulk update XXX set latest = false where id = id_to_take_down
-          take_down_candidate = self.latest_published.find_by_id(id_to_take_down)
-          p "To take down: #{take_down_candidate.inspect}"
-          take_down_candidate.try(:update_attribute, :latest, false)
+          take_down_candidate = latest_published_by_primary_key(id_to_take_down)
+          take_down_candidate.try(:take_down!)
           take_down_candidate
         end
 
       end
 
-      def create_published_versions_table
-        self.connection.create_table(published_version_table_name, :primary_key => 'published_id') do |t|
-          t.column 'version', :integer
-          t.column 'latest', :boolean
-        end
-        self.published_columns.each do |col|
-          self.connection.add_column published_version_table_name, col.name, col.type,
-                                     :limit     => col.limit,
-                                     :scale     => col.scale,
-                                     :precision => col.precision
-          end
+      def published_version_class
+        const_get published_version_class_name
       end
 
-      def published_columns
-        self.columns
-      end
-
-      def drop_published_versions_table
-        self.connection.drop_table(published_version_table_name)
-      end
+      published_version_class.published_flag_attribute_name = published_flag_attribute_name
 
       include Previewify::Methods
+
     end
 
   end

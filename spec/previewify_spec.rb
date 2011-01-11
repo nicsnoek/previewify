@@ -23,6 +23,45 @@ describe 'Previewify' do
         @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_model_published_versions')
       end
 
+      context "a published object" do
+
+        before :each do
+          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          @model.publish!
+          @published_model = TestModel.find(@model.id)
+        end
+
+        it "can not have its original attributes modified" do
+          @published_model.name = 'Other Name'
+          @published_model.number = 42
+          @published_model.save!
+
+          show_preview(false)
+          retrieved_published_model = TestModel.find(@model.id)
+          retrieved_published_model.name.should == 'Original Name'
+          retrieved_published_model.number.should == 5
+        end
+
+        it "can not have its version attribute modified" do
+          original_version_number = @published_model.version
+          @published_model.version = 10
+          @published_model.save!
+
+          show_preview(false)
+          retrieved_published_model = TestModel.find(@model.id)
+          retrieved_published_model.version.should == original_version_number
+        end
+
+        it "can by taken down by calling take_down!" do
+          @published_model.take_down!
+
+          show_preview(false)
+          lambda {
+            TestModel.find(@model.id)
+          }.should raise_error ActiveRecord::RecordNotFound
+        end
+      end
+
       describe ".create_published_versions_table" do
 
         it "creates published version table if it does not exist" do
