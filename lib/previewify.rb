@@ -39,20 +39,10 @@ module Previewify
 
         def revert_to_version!(version_number)
           version = self.class.published_version_class.specific_version_by_primary_key(id, version_number)
-          update_attributes!(published_attributes(version))
+          update_attributes!(version.published_attributes)
         end
 
         private
-
-        def published_attributes(version)
-          version.attributes.reject{|attribute_name|
-            [
-              self.class.published_version_primary_key_attribute_name,
-              self.class.version_attribute_name,
-              self.class.published_flag_attribute_name
-            ].include?(attribute_name)
-          }
-        end
 
         def self.show_preview?
           Thread.current['Previewify::show_preview'] || false
@@ -101,7 +91,15 @@ module Previewify
 
       ################################################
 
-       def create_published_versions_table
+      def published_version_metainformation_attributes
+        [
+          published_version_primary_key_attribute_name,
+          version_attribute_name,
+          published_flag_attribute_name
+        ]
+      end
+
+      def create_published_versions_table
         connection.create_table(published_version_table_name, :primary_key => published_version_primary_key_attribute_name) do |t|
           t.column version_attribute_name, :integer
           t.column published_flag_attribute_name, :boolean
@@ -129,6 +127,7 @@ module Previewify
         }
 
         cattr_accessor :published_flag_attribute_name
+        cattr_accessor :metainformation_attributes
 
         def initialize(attributes)
           super
@@ -141,6 +140,12 @@ module Previewify
 
         def take_down!
           update_attribute(published_flag_attribute_name, false)
+        end
+
+        def published_attributes
+          attributes.reject{|key|
+            metainformation_attributes.include?(key)
+          }
         end
 
         def self.latest_published_by_primary_key(primary_key_value)
@@ -164,6 +169,7 @@ module Previewify
       end
 
       published_version_class.published_flag_attribute_name = published_flag_attribute_name
+      published_version_class.metainformation_attributes = published_version_metainformation_attributes
 
       include Previewify::Methods
 

@@ -60,12 +60,13 @@ describe 'Previewify' do
           }.should raise_error ActiveRecord::RecordNotFound
         end
 
-        describe ".specific_version_by_primary_key" do
+        it ".specific_version_by_primary_key returns specified version" do
+          @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model
+        end
 
-          it "returns specified version" do
-            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model
-          end
-
+        it "#published_attributes only includes attributes published from preview object" do
+          published_attributes = @published_model.published_attributes
+          published_attributes.should_not have_key('published_id')
         end
 
       end
