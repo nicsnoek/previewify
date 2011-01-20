@@ -17,6 +17,14 @@ module Previewify
       # These methods are added to the previewified class:
       target.class_eval do
 
+        delegate :published_on, :to => :latest_published, :allow_nil => true
+
+        def latest_published
+          primary_key_name  = self.class.primary_key
+          primary_key_value = self.send(primary_key_name)
+          @latest_published ||= self.class.published_version_class.latest_published_by_primary_key(primary_key_value)
+        end
+
         def self.find_latest_published(*args)
           latest_published = published_version_class.latest_published_by_primary_key(*args)
           raise ::ActiveRecord::RecordNotFound unless latest_published.present?
@@ -85,6 +93,10 @@ module Previewify
         'id'
       end
 
+      def published_on_attribute_name
+        'published_on'
+      end
+
       def published_columns
         columns
       end
@@ -95,7 +107,8 @@ module Previewify
         [
           published_version_primary_key_attribute_name,
           version_attribute_name,
-          published_flag_attribute_name
+          published_flag_attribute_name,
+          published_on_attribute_name
         ]
       end
 
@@ -103,6 +116,7 @@ module Previewify
         connection.create_table(published_version_table_name, :primary_key => published_version_primary_key_attribute_name) do |t|
           t.column version_attribute_name, :integer
           t.column published_flag_attribute_name, :boolean
+          t.column published_on_attribute_name, :timestamp
         end
         published_columns.each do |published_column|
           connection.add_column published_version_table_name, published_column.name, published_column.type,
@@ -132,6 +146,7 @@ module Previewify
         def initialize(attributes)
           super
           self.latest = true
+          self.published_on = Time.now
           attributes.each do |key, value|
             self[key] = value
             self.class.attr_readonly(key)

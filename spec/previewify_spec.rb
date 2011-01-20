@@ -1,6 +1,7 @@
 require File.expand_path('spec_helper', File.dirname(__FILE__))
 require 'active_record'
 require 'previewify'
+require 'timecop'
 
 ActiveRecord::Base.configurations = YAML::load(IO.read(File.expand_path('db/database.yml', File.dirname(__FILE__))))
 ActiveRecord::Base.establish_connection('test')
@@ -161,6 +162,60 @@ describe 'Previewify' do
           model.publish!
           taken_down = model.take_down!
           taken_down.latest.should be_false
+        end
+
+      end
+
+
+      describe '#published_on' do
+
+        before :each do
+          @published_test_model_table.create
+          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+        end
+
+        context "when unpublished" do
+
+          describe "the preview object" do
+            it "returns nil" do
+              @model.published_on.should be_nil
+            end
+          end
+
+        end
+
+        context "when published" do
+
+          before :each do
+            Timecop.freeze(Time.now.to_s) do
+              @published_on    = Time.now
+              @published_model = @model.publish!
+            end
+          end
+
+          describe "the published object" do
+            it "returns the timestamp of when the object was published" do
+              @published_model.published_on.should == @published_on
+            end
+          end
+
+          describe "the preview object" do
+            it "returns the timestamp of when the object was published" do
+              @model.published_on.should == @published_on
+            end
+          end
+
+          context "and then taken down" do
+
+            before :each do
+              @model.take_down!
+            end
+
+            it "returns nil" do
+              @model.published_on.should be_nil
+            end
+          end
+
         end
 
       end
