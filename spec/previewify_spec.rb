@@ -72,7 +72,6 @@ describe 'Previewify' do
 
       end
 
-
       describe ".create_published_versions_table" do
 
         it "creates published version table if it does not exist" do
@@ -166,7 +165,6 @@ describe 'Previewify' do
 
       end
 
-
       describe '#published_on' do
 
         before :each do
@@ -216,6 +214,35 @@ describe 'Previewify' do
             end
           end
 
+        end
+
+      end
+
+      describe '#has_unpublished_changes?' do
+        before :each do
+          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+        end
+
+        it "is false when unpublished" do
+          @model.has_unpublished_changes?.should be_false
+        end
+
+        it "is false when published without changes" do
+          @model.publish!
+          @model.has_unpublished_changes?.should be_false
+        end
+
+        it "is true when changes have been made without publishing" do
+          @model.publish!
+          @model.name = 'Modified name'
+          @model.has_unpublished_changes?.should be_true
+        end
+
+        it "is true when changes have been saved without publishing" do
+          @model.publish!
+          @model.name = 'Modified name'
+          @model.save
+          @model.has_unpublished_changes?.should be_true
         end
 
       end

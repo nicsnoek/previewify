@@ -45,6 +45,13 @@ module Previewify
           self.class.published_version_class.take_down(id)
         end
 
+        def has_unpublished_changes?
+          return false if latest_published.blank?
+          p "latest_published.published_attributes = #{latest_published.published_attributes}"
+          p "self.attributes = #{self.attributes}"
+          return latest_published.published_attributes != self.attributes
+        end
+
         def revert_to_version!(version_number)
           version = self.class.published_version_class.specific_version_by_primary_key(id, version_number)
           update_attributes!(version.published_attributes)
