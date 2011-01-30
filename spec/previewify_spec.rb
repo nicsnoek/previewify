@@ -2,9 +2,13 @@ require File.expand_path('spec_helper', File.dirname(__FILE__))
 require 'active_record'
 require 'previewify'
 require 'timecop'
+require 'logger'
 
 ActiveRecord::Base.configurations = YAML::load(IO.read(File.expand_path('db/database.yml', File.dirname(__FILE__))))
 ActiveRecord::Base.establish_connection('test')
+
+ActiveRecord::Base.logger = Logger.new(STDOUT)
+ActiveRecord::Base.logger.level = Logger::DEBUG
 
 require 'db/schema'
 
@@ -18,37 +22,98 @@ describe 'Previewify' do
     previewify
   end
 
-    context "behaviour for default previewified" do
+  # Currently fails with "NotImplementedError: super from singleton method that is defined to multiple classes is not supported; this will be fixed in 1.9.3 or later"
+  # if it is run in conjunction with the other tests. Passes OK alone, this suggests that it is not possible to do this unless you do it for
+  # all previewified classes?
+  class OtherPublishedClassNameTestModel < ActiveRecord::Base
+    previewify :published_version_class_name => 'PublishedModel'
+  end
+
+  class OtherPublishedFlagTestModel < ActiveRecord::Base
+    previewify :published_flag_attribute_name => 'currently_published'
+  end
+
+  class ExtraColumnsTestModel < ActiveRecord::Base
+    previewify :preview_only_attributes => [:extra_content, :more_extra_content]
+  end
+
+  def default_previewified
+    @test_model_class           = TestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_published_versions')
+  end
+
+  def previewified_with_other_published_flag
+    @test_model_class           = OtherPublishedFlagTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_flag_test_model_published_versions')
+  end
+
+  def previewified_with_preview_only_content
+    @test_model_class           = ExtraColumnsTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_columns_test_model_published_versions')
+  end
+
+  def previewified_with_other_published_class_name
+    @test_model_class           = OtherPublishedClassNameTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_class_name_test_model_published_models')
+  end
+
+  it "preview only columns are not available on published object" do
+    previewified_with_preview_only_content
+    @published_test_model_table.create
+    model = @test_model_class.create!(
+        :name => 'Original Name',
+        :number => 5,
+        :content => 'At least a litre',
+        :extra_content => 'And another litre',
+        :more_extra_content => 'And one little wafer',
+        :float => 5.6,
+        :active => false)
+    published_model = model.publish!
+
+
+    lambda {
+      published_model.extra_content
+    }.should raise_error NoMethodError
+
+    lambda {
+      published_model.more_extra_content
+    }.should raise_error NoMethodError
+  end
+
+  ["default_previewified", "previewified_with_other_published_flag", "previewified_with_preview_only_content"].each do |previewified_type|
+  #[].each do |previewified_type|
+    context "behaviour for #{previewified_type}" do
+
 
       before :all do
-        @published_test_model_table = PublishedTestModelTable.new(TestModel, 'test_model_published_versions')
+        eval(previewified_type)
       end
 
       context "a published object" do
 
         before :each do
-          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          @model           = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           @published_model = @model.publish!
         end
 
         it "can not have its original attributes modified" do
-          @published_model.name = 'Other Name'
+          @published_model.name   = 'Other Name'
           @published_model.number = 42
           @published_model.save!
 
           show_preview(false)
-          retrieved_published_model = TestModel.find(@model.id)
+          retrieved_published_model = @test_model_class.find(@model.id)
           retrieved_published_model.name.should == 'Original Name'
           retrieved_published_model.number.should == 5
         end
 
         it "can not have its version attribute modified" do
-          original_version_number = @published_model.version
+          original_version_number  = @published_model.version
           @published_model.version = 10
           @published_model.save!
 
           show_preview(false)
-          retrieved_published_model = TestModel.find(@model.id)
+          retrieved_published_model = @test_model_class.find(@model.id)
           retrieved_published_model.version.should == original_version_number
         end
 
@@ -57,7 +122,7 @@ describe 'Previewify' do
 
           show_preview(false)
           lambda {
-            TestModel.find(@model.id)
+            @test_model_class.find(@model.id)
           }.should raise_error ActiveRecord::RecordNotFound
         end
 
@@ -77,7 +142,7 @@ describe 'Previewify' do
         it "creates published version table if it does not exist" do
           @published_test_model_table.drop
           @published_test_model_table.should_not be_in_existence
-          TestModel.create_published_versions_table
+          @test_model_class.create_published_versions_table
           @published_test_model_table.should be_in_existence
         end
 
@@ -95,10 +160,12 @@ describe 'Previewify' do
             @published_test_model_table.should have_column("published_id", :integer)
           end
 
-          it "has all columns that the draft version has by default" do
-            TestModel.columns.each do |column|
-              @published_test_model_table.should have_column(column.name)
-              @published_test_model_table.column_type(column.name).should == column.type
+          it "has all published columns of the draft version" do
+            @test_model_class.columns.each do |column|
+              if is_published? column
+                @published_test_model_table.should have_column(column.name)
+                @published_test_model_table.column_type(column.name).should == column.type
+              end
             end
           end
 
@@ -111,7 +178,7 @@ describe 'Previewify' do
         it "drops published version table if it exists" do
           @published_test_model_table.create
           @published_test_model_table.should be_in_existence
-          TestModel.drop_published_versions_table
+          @test_model_class.drop_published_versions_table
           @published_test_model_table.should_not be_in_existence
         end
       end
@@ -123,16 +190,16 @@ describe 'Previewify' do
         end
 
         it "creates a published version of the object with same attributes as preview object and initial version" do
-          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model           = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           published_model = model.publish!
           published_model.version.should == 1
           model.attribute_names.each do |attribute_name|
-            published_model.send(attribute_name).should == model.send(attribute_name)
+            published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
           end
         end
 
         it "creates a published version of the object with same attributes as preview object and increased version number" do
-          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           model.publish!
 
           model.update_attributes(:name => 'Other Name', :number => 55)
@@ -140,7 +207,7 @@ describe 'Previewify' do
 
           published_model.version.should == 2
           model.attribute_names.each do |attribute_name|
-            published_model.send(attribute_name).should == model.send(attribute_name)
+            published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
           end
         end
 
@@ -152,12 +219,12 @@ describe 'Previewify' do
         end
 
         it "returns nil but does not raise exception if object is not published" do
-          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           model.take_down!.should be_nil
         end
 
         it "returns taken down object and resets 'latest' flag on currently published object" do
-          model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           model.publish!
           taken_down = model.take_down!
           taken_down.latest.should be_false
@@ -169,7 +236,7 @@ describe 'Previewify' do
 
         before :each do
           @published_test_model_table.create
-          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
         end
 
         context "when unpublished" do
@@ -220,7 +287,7 @@ describe 'Previewify' do
 
       describe '#has_unpublished_changes?' do
         before :each do
-          @model = TestModel.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
         end
 
         it "is false when unpublished" do
@@ -256,8 +323,8 @@ describe 'Previewify' do
           end
 
           it "finds preview version" do
-            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            TestModel.find(model.id).should == model
+            model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            @test_model_class.find(model.id).should == model
           end
         end
 
@@ -269,25 +336,25 @@ describe 'Previewify' do
 
 
           it "does not find preview version" do
-            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             lambda {
-              TestModel.find(model.id)
+              @test_model_class.find(model.id)
             }.should raise_error ActiveRecord::RecordNotFound
           end
 
           it "finds published version with matching id" do
-            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             model.publish!
-            published_model = TestModel.find(model.id)
+            published_model = @test_model_class.find(model.id)
             published_model.id.should == model.id
           end
 
           it "does not find preview version or published version when item is taken down" do
-            model = TestModel.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             model.publish!
             model.take_down!
             lambda {
-              TestModel.find(model.id)
+              @test_model_class.find(model.id)
             }.should raise_error ActiveRecord::RecordNotFound
           end
 
@@ -299,10 +366,10 @@ describe 'Previewify' do
       describe "#revert_to_version" do
 
         it "reverts preview to specified version" do
-          model = TestModel.create!(:name => 'My Name', :number => 10, :content => 'At least a litre', :float => 5.6, :active => false)
-          model.publish!  #version 1
+          model = @test_model_class.create!(:name => 'My Name', :number => 10, :content => 'At least a litre', :float => 5.6, :active => false)
+          model.publish! #version 1
           model.number = 20
-          model.publish!  #version 2
+          model.publish! #version 2
           model.revert_to_version!(1)
           model.number.should == 10
           model.revert_to_version!(2)
@@ -313,16 +380,22 @@ describe 'Previewify' do
     end
   end
 
+  def is_published?(name)
+    @test_model_class.previewify_options.published_columns.include? name
+  end
+
 
   class PublishedTestModelTable
 
     def initialize(model_class, published_versions_table_name)
-      @model_class = model_class
+      @model_class                   = model_class
       @published_versions_table_name = published_versions_table_name
     end
 
     def in_existence?
-      @model_class.connection.tables.include?(@published_versions_table_name)
+      r = @model_class.connection.tables.include?(@published_versions_table_name)
+      p "#{@published_versions_table_name} in existence? #{r}"
+      return r
     end
 
     def drop
@@ -342,3 +415,4 @@ describe 'Previewify' do
     end
 
   end
+end

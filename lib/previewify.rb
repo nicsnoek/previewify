@@ -5,12 +5,76 @@ module Previewify
   module Control
 
     def show_preview(show_preview = true)
-      Thread.current['Previewify::show_preview']  =  show_preview
+      Thread.current['Previewify::show_preview'] = show_preview
     end
 
   end
 
-  module Methods
+  class Options
+
+    def initialize(options_hash, orginal_table_name, original_columns)
+      @options_hash       = options_hash
+      @orginal_table_name = orginal_table_name
+      @columns            = original_columns
+    end
+
+    def published_version_table_name
+      "#{@orginal_table_name.singularize}_#{published_version_class_name.underscore.pluralize}"
+    end
+
+    def published_version_class_name
+      @options_hash[:published_version_class_name] || "PublishedVersion"
+    end
+
+    def published_flag_attribute_name
+      @options_hash[:published_flag_attribute_name] || 'latest'
+    end
+
+    def version_attribute_name
+      'version'
+    end
+
+    def published_version_primary_key_attribute_name
+      'published_id'
+    end
+
+    def primary_key_attribute_name
+      @options_hash[:primary_key] || 'id'
+    end
+
+    def published_on_attribute_name
+      'published_on'
+    end
+
+    def published_columns
+      preview_only_columns = @options_hash[:preview_only_attributes]
+      return @columns if preview_only_columns.blank?
+      @columns.reject { |column|
+        preview_only_columns.include? column.name.to_sym
+      }
+    end
+
+    def published_attributes(all_preview_attributes)
+      preview_only_columns = @options_hash[:preview_only_attributes]
+      return all_preview_attributes if preview_only_columns.blank?
+      all_preview_attributes.reject { |key|
+        preview_only_columns.include? key.to_sym
+      }
+    end
+
+    def published_version_metainformation_attributes
+      [
+          published_version_primary_key_attribute_name,
+          version_attribute_name,
+          published_flag_attribute_name,
+          published_on_attribute_name
+      ]
+    end
+
+
+  end
+
+  module InstanceMethods
 
     def self.included(target)
 
@@ -20,8 +84,9 @@ module Previewify
         delegate :published_on, :to => :latest_published, :allow_nil => true
 
         def latest_published
-          primary_key_name  = self.class.primary_key
+          primary_key_name  = self.class.previewify_options.primary_key_attribute_name
           primary_key_value = self.send(primary_key_name)
+
           @latest_published ||= self.class.published_version_class.latest_published_by_primary_key(primary_key_value)
         end
 
@@ -36,9 +101,19 @@ module Previewify
         end
 
         def publish!
-          latest_published = take_down!
+          latest_published         = take_down!
           latest_published_version = latest_published.try(:version) || 0
-          self.class.published_version_class.create(attributes.merge(self.class.version_attribute_name => latest_published_version + 1))
+          attributes_to_publish    = previewify_options.published_attributes(attributes)
+          attributes_to_publish.merge!(
+              previewify_options.version_attribute_name        => latest_published_version + 1,
+              previewify_options.published_flag_attribute_name => true,
+              :published_on                                    => Time.now
+          )
+
+          published_version    = self.class.published_version_class.new(attributes_to_publish)
+          published_version.id = attributes_to_publish['id'] # won't mass-assign
+          published_version.save!
+          return published_version
         end
 
         def take_down!
@@ -47,9 +122,7 @@ module Previewify
 
         def has_unpublished_changes?
           return false if latest_published.blank?
-          p "latest_published.published_attributes = #{latest_published.published_attributes}"
-          p "self.attributes = #{self.attributes}"
-          return latest_published.published_attributes != self.attributes
+          return latest_published.published_attributes != previewify_options.published_attributes(attributes)
         end
 
         def revert_to_version!(version_number)
@@ -71,102 +144,53 @@ module Previewify
 
   module ActiveRecord
 
-    def previewify(options = {})
-      @options = options
+    def previewify(options_hash = {})
+      previewify_with_options(::Previewify::Options.new(options_hash, table_name, columns))
+    end
 
-      # These will be configurable from the options:
 
-      def published_version_table_name
-        "#{table_name.singularize}_published_versions"
-      end
+    def previewify_with_options(previewify_options)
 
-      def published_version_class_name
-        "PublishedVersion"
-      end
-
-      def published_flag_attribute_name
-        'latest'
-      end
-
-      def version_attribute_name
-        'version'
-      end
-
-      def published_version_primary_key_attribute_name
-        'published_id'
-      end
-
-      def primary_key_attribute_name
-        'id'
-      end
-
-      def published_on_attribute_name
-        'published_on'
-      end
-
-      def published_columns
-        columns
-      end
-
-      ################################################
-
-      def published_version_metainformation_attributes
-        [
-          published_version_primary_key_attribute_name,
-          version_attribute_name,
-          published_flag_attribute_name,
-          published_on_attribute_name
-        ]
-      end
+      cattr_accessor :previewify_options
+      self.previewify_options = previewify_options
 
       def create_published_versions_table
-        connection.create_table(published_version_table_name, :primary_key => published_version_primary_key_attribute_name) do |t|
-          t.column version_attribute_name, :integer
-          t.column published_flag_attribute_name, :boolean
-          t.column published_on_attribute_name, :timestamp
+        connection.create_table(previewify_options.published_version_table_name, :primary_key => previewify_options.published_version_primary_key_attribute_name) do |t|
+          t.column previewify_options.version_attribute_name, :integer
+          t.column previewify_options.published_flag_attribute_name, :boolean
+          t.column previewify_options.published_on_attribute_name, :timestamp
         end
-        published_columns.each do |published_column|
-          connection.add_column published_version_table_name, published_column.name, published_column.type,
-                                     :limit     => published_column.limit,
-                                     :scale     => published_column.scale,
-                                     :precision => published_column.precision
-          end
+        previewify_options.published_columns.each do |published_column|
+          connection.add_column previewify_options.published_version_table_name, published_column.name, published_column.type,
+                                :limit     => published_column.limit,
+                                :scale     => published_column.scale,
+                                :precision => published_column.precision
+        end
       end
 
       def drop_published_versions_table
-        connection.drop_table(published_version_table_name)
+        connection.drop_table(previewify_options.published_version_table_name)
       end
 
-      const_set(published_version_class_name, Class.new(::ActiveRecord::Base)).class_eval do
+      const_set(previewify_options.published_version_class_name, Class.new(::ActiveRecord::Base)).class_eval do
 
         named_scope :latest_published, lambda { |primary_key_value|
-          { :conditions => ["#{primary_key_attribute_name} = ? AND #{published_flag_attribute_name} = true", primary_key_value] }
+          {:conditions => ["#{previewify_options.primary_key_attribute_name} = ? AND #{previewify_options.published_flag_attribute_name} = true", primary_key_value]}
         }
 
         named_scope :version, lambda { |primary_key_value, version_number|
-          { :conditions => ["#{primary_key_attribute_name} = ? AND #{version_attribute_name} = ?", primary_key_value, version_number] }
+          {:conditions => ["#{previewify_options.primary_key_attribute_name} = ? AND #{previewify_options.version_attribute_name} = ?", primary_key_value, version_number]}
         }
 
-        cattr_accessor :published_flag_attribute_name
-        cattr_accessor :metainformation_attributes
-
-        def initialize(attributes)
-          super
-          self.latest = true
-          self.published_on = Time.now
-          attributes.each do |key, value|
-            self[key] = value
-            self.class.attr_readonly(key)
-          end
-        end
+        cattr_accessor :previewify_options
 
         def take_down!
-          update_attribute(published_flag_attribute_name, false)
+          update_attribute(previewify_options.published_flag_attribute_name, false)
         end
 
         def published_attributes
-          attributes.reject{|key|
-            metainformation_attributes.include?(key)
+          attributes.reject { |key|
+            previewify_options.published_version_metainformation_attributes.include?(key)
           }
         end
 
@@ -187,13 +211,16 @@ module Previewify
       end
 
       def published_version_class
-        const_get published_version_class_name
+        const_get previewify_options.published_version_class_name
       end
 
-      published_version_class.published_flag_attribute_name = published_flag_attribute_name
-      published_version_class.metainformation_attributes = published_version_metainformation_attributes
+      published_version_class.previewify_options = previewify_options
 
-      include Previewify::Methods
+      published_version_class.columns.each { |column|
+        published_version_class.attr_readonly(column.name) unless column.name == previewify_options.published_flag_attribute_name
+      }
+
+      include Previewify::InstanceMethods
 
     end
 
@@ -207,5 +234,5 @@ ActiveRecord::Base.extend Previewify::ActiveRecord
 #require 'previewify/activerecord'
 
 #if defined? Rails
-  # include stuff?
+# include stuff?
 #end
