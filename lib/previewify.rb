@@ -12,14 +12,14 @@ module Previewify
 
   class Options
 
-    def initialize(options_hash, orginal_table_name, original_columns)
+    def initialize(options_hash, preview_table_name, preview_columns)
       @options_hash       = options_hash
-      @orginal_table_name = orginal_table_name
-      @columns            = original_columns
+      @preview_table_name = preview_table_name
+      @preview_columns    = preview_columns
     end
 
     def published_version_table_name
-      "#{@orginal_table_name.singularize}_#{published_version_class_name.underscore.pluralize}"
+      "#{@preview_table_name.singularize}_#{published_version_class_name.underscore.pluralize}"
     end
 
     def published_version_class_name
@@ -48,8 +48,8 @@ module Previewify
 
     def published_columns
       preview_only_columns = @options_hash[:preview_only_attributes]
-      return @columns if preview_only_columns.blank?
-      @columns.reject { |column|
+      return @preview_columns if preview_only_columns.blank?
+      @preview_columns.reject { |column|
         preview_only_columns.include? column.name.to_sym
       }
     end
@@ -103,17 +103,7 @@ module Previewify
         def publish!
           latest_published         = take_down!
           latest_published_version = latest_published.try(:version) || 0
-          attributes_to_publish    = previewify_options.published_attributes(attributes)
-          attributes_to_publish.merge!(
-              previewify_options.version_attribute_name        => latest_published_version + 1,
-              previewify_options.published_flag_attribute_name => true,
-              :published_on                                    => Time.now
-          )
-
-          published_version    = self.class.published_version_class.new(attributes_to_publish)
-          published_version.id = attributes_to_publish['id'] # won't mass-assign
-          published_version.save!
-          return published_version
+          self.class.published_version_class.publish(self, latest_published_version + 1)
         end
 
         def take_down!
@@ -144,15 +134,10 @@ module Previewify
 
   module ActiveRecord
 
-    def previewify(options_hash = {})
-      previewify_with_options(::Previewify::Options.new(options_hash, table_name, columns))
-    end
-
-
-    def previewify_with_options(previewify_options)
+    def previewify(options = {})
 
       cattr_accessor :previewify_options
-      self.previewify_options = previewify_options
+      self.previewify_options = ::Previewify::Options.new(options, table_name, columns)
 
       def create_published_versions_table
         connection.create_table(previewify_options.published_version_table_name, :primary_key => previewify_options.published_version_primary_key_attribute_name) do |t|
@@ -183,6 +168,24 @@ module Previewify
         }
 
         cattr_accessor :previewify_options
+
+        def self.publish(preview, version)
+          #Note: Can not set to readonly when .previewify is called as the published version table will not yet exist at that point'
+          self.columns.each { |column|
+            self.attr_readonly(column.name) unless column.name == previewify_options.published_flag_attribute_name
+          }
+
+          attributes_to_publish = previewify_options.published_attributes(preview.attributes)
+          attributes_to_publish.merge!(
+              previewify_options.version_attribute_name        => version,
+              previewify_options.published_flag_attribute_name => true,
+              :published_on                                    => Time.now
+          )
+          published_version    = self.new(attributes_to_publish)
+          published_version.id = preview.id # won't mass-assign
+          published_version.save!
+          return published_version
+        end
 
         def take_down!
           update_attribute(previewify_options.published_flag_attribute_name, false)
@@ -215,10 +218,6 @@ module Previewify
       end
 
       published_version_class.previewify_options = previewify_options
-
-      published_version_class.columns.each { |column|
-        published_version_class.attr_readonly(column.name) unless column.name == previewify_options.published_flag_attribute_name
-      }
 
       include Previewify::InstanceMethods
 
