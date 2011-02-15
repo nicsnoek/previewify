@@ -19,7 +19,13 @@ describe 'Previewify' do
 
 
   class TestModel < ActiveRecord::Base
+
     previewify
+
+    def some_method_for_both
+      "This is an extra method for both"
+    end
+
   end
 
   class OtherPublishedClassNameTestModel < ActiveRecord::Base
@@ -32,6 +38,25 @@ describe 'Previewify' do
 
   class ExtraColumnsTestModel < ActiveRecord::Base
     previewify :preview_only_attributes => [:extra_content, :more_extra_content]
+  end
+
+  class ExtraPreviewMethodTestModel < ActiveRecord::Base
+
+    def some_method_for_preview
+      "This is a method for preview only"
+    end
+
+    previewify :preview_only_methods => [:some_method_for_preview]
+  end
+
+  class ExtraPublishedMethodTestModel < ActiveRecord::Base
+
+    def some_method_for_published
+      "This is a method for published only"
+    end
+
+    previewify :published_only_methods => [:some_method_for_published]
+
   end
 
   def default_previewified
@@ -52,6 +77,16 @@ describe 'Previewify' do
   def previewified_with_other_published_class_name
     @test_model_class           = OtherPublishedClassNameTestModel
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_class_name_test_model_published_models')
+  end
+
+  def extra_preview_method_previewified
+    @test_model_class           = ExtraPreviewMethodTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_preview_method_test_model_published_versions')
+  end
+
+  def extra_published_method_previewified
+    @test_model_class           = ExtraPublishedMethodTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_published_method_test_model_published_versions')
   end
 
   it "preview only columns are not available on published object" do
@@ -77,7 +112,79 @@ describe 'Previewify' do
     }.should raise_error NoMethodError
   end
 
-  ["default_previewified", "previewified_with_other_published_flag", "previewified_with_preview_only_content", "previewified_with_other_published_class_name"].each do |previewified_type|
+  context "method that should be available on draft and preview" do
+
+    before :each do
+      default_previewified
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+    it "is available on preview version" do
+      @model.should respond_to :some_method_for_both
+    end
+
+    it "is available on published version" do
+      @published_model.should respond_to :some_method_for_both
+    end
+  end
+
+  context "method that should be only available on preview" do
+
+    before :each do
+      extra_preview_method_previewified
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+    it "is only available on preview version" do
+      @model.should respond_to :some_method_for_preview
+    end
+
+    it "is not available on published version" do
+      @published_model.should_not respond_to :some_method_for_preview
+    end
+  end
+
+  context "method that should be only available on published" do
+
+    before :each do
+      extra_published_method_previewified
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+#    TODO: Make this work:
+#    it "is not available on preview version" do
+#      @model.should_not respond_to :some_method_for_published
+#    end
+
+    it "is only available on published version" do
+      @published_model.should respond_to :some_method_for_published
+    end
+  end
+
+  ["default_previewified",
+   "previewified_with_other_published_flag",
+   "previewified_with_preview_only_content",
+   "previewified_with_other_published_class_name",
+   "extra_preview_method_previewified",
+   "extra_published_method_previewified"].each do |previewified_type|
     #[].each do |previewified_type|
     context "behaviour for #{previewified_type}" do
 

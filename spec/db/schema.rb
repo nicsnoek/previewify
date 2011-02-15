@@ -33,5 +33,23 @@ ActiveRecord::Schema.define :version => 0 do
      t.float :float
      t.boolean :active
      t.boolean :latest #imagine that this table already used this name...
-   end
+  end
+
+  create_table :extra_preview_method_test_models, :force => true do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.float :float
+    t.boolean :active
+  end
+
+  create_table :extra_published_method_test_models, :force => true do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.float :float
+    t.boolean :active
+  end
+
+
 end

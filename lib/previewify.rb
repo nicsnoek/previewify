@@ -71,6 +71,14 @@ module Previewify
       ]
     end
 
+    def published_only_methods
+      @options_hash[:published_only_methods]
+    end
+
+    def preview_only_methods
+      @options_hash[:preview_only_methods]
+    end
+
 
   end
 
@@ -139,6 +147,8 @@ module Previewify
       cattr_accessor :previewify_options
       self.previewify_options = ::Previewify::Options.new(options, table_name, columns)
 
+      include Previewify::InstanceMethods
+
       def create_published_versions_table
         connection.create_table(previewify_options.published_version_table_name, :primary_key => previewify_options.published_version_primary_key_attribute_name) do |t|
           t.column previewify_options.version_attribute_name, :integer
@@ -157,7 +167,18 @@ module Previewify
         connection.drop_table(previewify_options.published_version_table_name)
       end
 
-      const_set(previewify_options.published_version_class_name, Class.new(::ActiveRecord::Base)).class_eval do
+      const_set(previewify_options.published_version_class_name, Class.new(self)).class_eval do
+
+        undef published_on #Must undefine published_on to avoid infinite recursion. This class defines its own published_on attribute
+
+        if previewify_options.preview_only_methods.present?
+          previewify_options.preview_only_methods.each do |preview_only_method|
+            eval ("undef #{preview_only_method}")
+          end
+        end
+
+        set_table_name(previewify_options.published_version_table_name)
+
 
         named_scope :latest_published, lambda { |primary_key_value|
           {:conditions => ["#{previewify_options.primary_key_attribute_name} = ? AND #{previewify_options.published_flag_attribute_name} = true", primary_key_value]}
@@ -219,7 +240,6 @@ module Previewify
 
       published_version_class.previewify_options = previewify_options
 
-      include Previewify::InstanceMethods
 
     end
 
