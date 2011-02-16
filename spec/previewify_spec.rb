@@ -22,8 +22,12 @@ describe 'Previewify' do
 
     previewify
 
-    def some_method_for_both
-      "This is an extra method for both"
+    def some_method_for_both(some_value)
+      @some_value = some_value
+    end
+
+    def another_method_for_both
+      @some_value
     end
 
   end
@@ -42,20 +46,29 @@ describe 'Previewify' do
 
   class ExtraPreviewMethodTestModel < ActiveRecord::Base
 
-    def some_method_for_preview
-      "This is a method for preview only"
+    def some_method_for_preview(some_value)
+      @some_value = some_value
     end
 
-    previewify :preview_only_methods => [:some_method_for_preview]
+    def another_method_for_preview
+      @some_value
+    end
+
+    previewify :preview_only_methods => [:some_method_for_preview, :another_method_for_preview]
   end
 
   class ExtraPublishedMethodTestModel < ActiveRecord::Base
 
-    def some_method_for_published
-      "This is a method for published only"
+    def some_method_for_published(some_value)
+      p "some_method_for_published called on #{self.class.name}"
+      @some_value = some_value
     end
 
-    previewify :published_only_methods => [:some_method_for_published]
+    def another_method_for_published
+      @some_value
+    end
+
+    previewify :published_only_methods => [:some_method_for_published, :another_method_for_published]
 
   end
 
@@ -127,10 +140,16 @@ describe 'Previewify' do
 
     it "is available on preview version" do
       @model.should respond_to :some_method_for_both
+      @model.should respond_to :another_method_for_both
+      @model.some_method_for_both("test value")
+      @model.another_method_for_both.should == "test value"
     end
 
     it "is available on published version" do
       @published_model.should respond_to :some_method_for_both
+      @published_model.should respond_to :another_method_for_both
+      @published_model.some_method_for_both("test value")
+      @published_model.another_method_for_both.should == "test value"
     end
   end
 
@@ -149,10 +168,14 @@ describe 'Previewify' do
 
     it "is only available on preview version" do
       @model.should respond_to :some_method_for_preview
+      @model.should respond_to :another_method_for_preview
+      @model.some_method_for_preview("a test value")
+      @model.another_method_for_preview.should == "a test value"
     end
 
     it "is not available on published version" do
       @published_model.should_not respond_to :some_method_for_preview
+      @published_model.should_not respond_to :another_method_for_preview
     end
   end
 
@@ -171,10 +194,14 @@ describe 'Previewify' do
 
     it "is not available on preview version" do
       @model.should_not respond_to :some_method_for_published
+      @model.should_not respond_to :another_method_for_published
     end
 
     it "is only available on published version" do
       @published_model.should respond_to :some_method_for_published
+      @published_model.should respond_to :another_method_for_published
+      @published_model.some_method_for_published("test argument value")
+      @published_model.another_method_for_published.should == "test argument value"
     end
   end
 

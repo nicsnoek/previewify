@@ -179,10 +179,10 @@ module Previewify
 
         if previewify_options.published_only_methods.present?
           previewify_options.published_only_methods.each do |published_only_method|
-            eval("#{published_only_method}_method = self.instance_method(:#{published_only_method})")
+            eval("@@#{published_only_method}_method = self.instance_method(:#{published_only_method})")
 
-            define_method("#{published_only_method}") do
-              eval("#{published_only_method}_method.bind(self).call")
+            define_method("#{published_only_method}") do |*args|
+              eval("@@#{published_only_method}_method.bind(self).call(*args)")
             end
 
           end
