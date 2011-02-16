@@ -169,10 +169,9 @@ describe 'Previewify' do
       @published_model = @model.publish!
     end
 
-#    TODO: Make this work:
-#    it "is not available on preview version" do
-#      @model.should_not respond_to :some_method_for_published
-#    end
+    it "is not available on preview version" do
+      @model.should_not respond_to :some_method_for_published
+    end
 
     it "is only available on published version" do
       @published_model.should respond_to :some_method_for_published

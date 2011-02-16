@@ -177,6 +177,17 @@ module Previewify
           end
         end
 
+        if previewify_options.published_only_methods.present?
+          previewify_options.published_only_methods.each do |published_only_method|
+            eval("#{published_only_method}_method = self.instance_method(:#{published_only_method})")
+
+            define_method("#{published_only_method}") do
+              eval("#{published_only_method}_method.bind(self).call")
+            end
+
+          end
+        end
+
         set_table_name(previewify_options.published_version_table_name)
 
 
@@ -240,6 +251,11 @@ module Previewify
 
       published_version_class.previewify_options = previewify_options
 
+      if previewify_options.published_only_methods.present?
+        previewify_options.published_only_methods.each do |published_only_method|
+          remove_method(published_only_method)
+        end
+      end
 
     end
 
