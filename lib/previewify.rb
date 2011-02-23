@@ -173,16 +173,18 @@ module Previewify
 
         if previewify_options.preview_only_methods.present?
           previewify_options.preview_only_methods.each do |preview_only_method|
-            eval ("undef #{preview_only_method}")
+            undef_method(preview_only_method)
           end
         end
 
         if previewify_options.published_only_methods.present?
           previewify_options.published_only_methods.each do |published_only_method|
-            eval("@@#{published_only_method}_method = self.instance_method(:#{published_only_method})")
+
+
+            class_variable_set("@@#{published_only_method}_method", self.instance_method(published_only_method))
 
             define_method("#{published_only_method}") do |*args|
-              eval("@@#{published_only_method}_method.bind(self).call(*args)")
+              self.class.class_variable_get("@@#{published_only_method}_method").bind(self).call(*args)
             end
 
           end
