@@ -105,7 +105,17 @@ module Previewify
         end
 
         def self.find(*args)
-          show_preview? ? super(*args) : find_latest_published(*args)
+          show_preview? ? super(*args) : published_version_class.latest_published.find(*args)
+        end
+
+        # When in live mode, delegate all class method missing (eg. dynamic finders)
+        # to published_version_class.latest_published.whatever_method_is_missing
+        def self.method_missing(*args)
+          if show_preview? || self == published_version_class
+            super(*args)
+          else
+            published_version_class.latest_published.send(args[0], *args.slice(1..-1))
+          end
         end
 
         def publish!
@@ -169,6 +179,8 @@ module Previewify
 
       const_set(previewify_options.published_version_class_name, Class.new(self)).class_eval do
 
+        set_table_name(previewify_options.published_version_table_name)
+
         undef published_on #Must undefine published_on to avoid infinite recursion. This class defines its own published_on attribute
 
         if previewify_options.preview_only_methods.present?
@@ -179,26 +191,23 @@ module Previewify
 
         if previewify_options.published_only_methods.present?
           previewify_options.published_only_methods.each do |published_only_method|
-
-
             class_variable_set("@@#{published_only_method}_method", self.instance_method(published_only_method))
-
             define_method("#{published_only_method}") do |*args|
               self.class.class_variable_get("@@#{published_only_method}_method").bind(self).call(*args)
             end
-
           end
         end
 
-        set_table_name(previewify_options.published_version_table_name)
-
-
-        named_scope :latest_published, lambda { |primary_key_value|
-          {:conditions => ["#{previewify_options.primary_key_attribute_name} = ? AND #{previewify_options.published_flag_attribute_name} = true", primary_key_value]}
+        named_scope :latest_published, lambda {
+          {:conditions => ["#{previewify_options.published_flag_attribute_name} = true"]}
         }
 
-        named_scope :version, lambda { |primary_key_value, version_number|
-          {:conditions => ["#{previewify_options.primary_key_attribute_name} = ? AND #{previewify_options.version_attribute_name} = ?", primary_key_value, version_number]}
+        named_scope :with_primary_key, lambda { |primary_key_value|
+          {:conditions => ["#{previewify_options.primary_key_attribute_name} = ?", primary_key_value]}
+        }
+
+        named_scope :with_version, lambda { |version_number|
+          {:conditions => ["#{previewify_options.version_attribute_name} = ?", version_number]}
         }
 
         cattr_accessor :previewify_options
@@ -216,7 +225,9 @@ module Previewify
               :published_on                                    => Time.now
           )
           published_version    = self.new(attributes_to_publish)
-          published_version.id = preview.id # won't mass-assign
+          if preview.respond_to?(:id)
+            published_version.id = preview.id # won't mass-assign
+          end
           published_version.save!
           return published_version
         end
@@ -232,11 +243,11 @@ module Previewify
         end
 
         def self.latest_published_by_primary_key(primary_key_value)
-          latest_published(primary_key_value)[0]
+          latest_published.with_primary_key(primary_key_value)[0]
         end
 
         def self.specific_version_by_primary_key(primary_key_value, version_number)
-          version(primary_key_value, version_number)[0]
+          with_primary_key(primary_key_value).with_version(version_number)[0]
         end
 
         def self.take_down(id_to_take_down)

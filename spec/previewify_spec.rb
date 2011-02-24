@@ -266,7 +266,7 @@ describe 'Previewify' do
         end
       end
 
-      context "when the published versions table has been created" do
+      context "when the published versions table has been created," do
 
         before :all do
           @published_test_model_table.create
@@ -460,9 +460,123 @@ describe 'Previewify' do
               show_preview(true)
             end
 
+            it "finds preview versions by id" do
+              model1 = @test_model_class.create!(:name => 'My Name1', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name2', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              @test_model_class.find(model1.id).should == model1
+              @test_model_class.find(model1.id, model2.id).should == [model1, model2]
+            end
+
+            it "finds preview versions by condition" do
+              model1 = @test_model_class.create!(:name => 'My Name1', :number => 5, :content => 'At least two cups', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name2', :number => 5, :content => 'At least two cups', :float => 5.6, :active => false)
+              @test_model_class.find(:first, :conditions => {:content => 'At least two cups'}).should == model1
+              @test_model_class.find(:all, :conditions => {:content => 'At least two cups'}).should == [model1, model2]
+              @test_model_class.find(:last, :conditions => {:content => 'At least two cups'}).should == model2
+            end
+
+          end
+
+          context "in live mode" do
+
+            before :each do
+              show_preview(false)
+            end
+
+
+            it "does not find preview only versions by id" do
+              model1 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+
+              lambda {
+                @test_model_class.find(model1.id)
+              }.should raise_error ActiveRecord::RecordNotFound
+
+              lambda {
+                @test_model_class.find(model1.id, model2.id)
+              }.should raise_error ActiveRecord::RecordNotFound
+            end
+
+            it "does not find preview only versions by condition" do
+              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a centi-litre', :float => 5.6, :active => false)
+              @test_model_class.find(:first, :conditions => {:content => 'At least a centi-litre'}).should be_nil
+              @test_model_class.find(:all, :conditions => {:content => 'At least a centi-litre'}).should == []
+              @test_model_class.find(:last, :conditions => {:content => 'At least a centi-litre'}).should be_nil
+            end
+
+            it "finds published versions by id" do
+              model1 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model1.publish!
+              model2.publish!
+              @test_model_class.find(model1.id).id.should == model1.id
+              published_models = @test_model_class.find(model1.id, model2.id)
+              published_models[0].id.should == model1.id
+              published_models[1].id.should == model2.id
+            end
+
+            it "finds published versions by condition" do
+              model1 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a femto-litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a femto-litre', :float => 5.6, :active => false)
+              model1.publish!
+              model2.publish!
+              @test_model_class.find(:first, :conditions => {:content => 'At least a femto-litre'}).id.should == model1.id
+              @test_model_class.find(:last, :conditions => {:content => 'At least a femto-litre'}).id.should == model2.id
+              published_models = @test_model_class.find(:all, :conditions => {:content => 'At least a femto-litre'})
+              published_models[0].id.should == model1.id
+              published_models[1].id.should == model2.id
+            end
+
+            it "does not find any versions by id when any items are taken down" do
+              model1 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model1.publish!
+              model1.take_down!
+              model2.publish!
+
+              lambda {
+                @test_model_class.find(model1.id)
+              }.should raise_error ActiveRecord::RecordNotFound
+
+              lambda {
+                @test_model_class.find(model1.id, model2.id)
+              }.should raise_error ActiveRecord::RecordNotFound
+            end
+
+            it "does not find any versions by condition when items are taken down" do
+              model1 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a splash', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a splash', :float => 5.6, :active => false)
+              model1.publish!
+              model1.take_down!
+              model2.publish!
+              model2.take_down!
+              @test_model_class.find(:first, :conditions => {:content => 'At least a splash'}).should be_nil
+              @test_model_class.find(:all, :conditions => {:content => 'At least a splash'}).should == []
+              @test_model_class.find(:last, :conditions => {:content => 'At least a splash'}).should be_nil
+            end
+
+          end
+
+
+        end
+
+        describe "dynamic finder" do
+
+          context "in preview mode" do
+
+            before :each do
+              show_preview(true)
+            end
+
             it "finds preview version" do
-              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-              @test_model_class.find(model.id).should == model
+              model = @test_model_class.create!(:name => 'My Unique Name1', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              @test_model_class.find_by_name('My Unique Name1').should == model
+            end
+
+            it "finds preview versions" do
+              model1 = @test_model_class.create!(:name => 'My Unique Name1bis', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Unique Name1bis', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              @test_model_class.find_all_by_name('My Unique Name1bis').should == [model1, model2]
             end
           end
 
@@ -473,27 +587,33 @@ describe 'Previewify' do
             end
 
 
-            it "does not find preview version" do
-              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-              lambda {
-                @test_model_class.find(model.id)
-              }.should raise_error ActiveRecord::RecordNotFound
+            it "does not find preview only version" do
+              model = @test_model_class.create!(:name => 'My Unique Name2', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              @test_model_class.find_by_name('My Unique Name2').should be_nil
             end
 
-            it "finds published version with matching id" do
-              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            it "finds published version with matching value" do
+              model = @test_model_class.create!(:name => 'My Unique Name3', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
               model.publish!
-              published_model = @test_model_class.find(model.id)
-              published_model.id.should == model.id
+              published_model = @test_model_class.find_by_name('My Unique Name3')
+              published_model.name.should == model.name
+            end
+
+            it "finds published version with matching values" do
+              model1 = @test_model_class.create!(:name => 'My Unique Name3bis', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Unique Name3bis', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model1.publish!
+              model2.publish!
+              published_models = @test_model_class.find_all_by_name('My Unique Name3bis')
+              published_models.length.should == 2
             end
 
             it "does not find preview version or published version when item is taken down" do
-              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+              model = @test_model_class.create!(:name => 'My Unique Name4', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
               model.publish!
               model.take_down!
-              lambda {
-                @test_model_class.find(model.id)
-              }.should raise_error ActiveRecord::RecordNotFound
+              @test_model_class.find_all_by_name('My Unique Name4').should == []
+              @test_model_class.find_by_name('My Unique Name4').should be_nil
             end
 
           end
