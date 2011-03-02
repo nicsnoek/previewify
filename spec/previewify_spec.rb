@@ -423,31 +423,42 @@ describe 'Previewify' do
 
         end
 
-        describe '#has_unpublished_changes?' do
+        describe '(#has_unpublished_changes?, #published?)' do
           before :each do
             @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           end
 
-          it "is false when unpublished" do
+          it "(false, false) when unpublished" do
             @model.has_unpublished_changes?.should be_false
+            @model.published?.should be_false
           end
 
-          it "is false when published without changes" do
+          it "(false, true) when published without changes" do
             @model.publish!
             @model.has_unpublished_changes?.should be_false
+            @model.published?.should be_true
           end
 
-          it "is true when changes have been made without publishing" do
+          it "(true, true) when changes have been made without publishing" do
             @model.publish!
             @model.name = 'Modified name'
             @model.has_unpublished_changes?.should be_true
+            @model.published?.should be_true
           end
 
-          it "is true when changes have been saved without publishing" do
+          it "(true, true) when changes have been saved without publishing" do
             @model.publish!
             @model.name = 'Modified name'
             @model.save
             @model.has_unpublished_changes?.should be_true
+            @model.published?.should be_true
+          end
+
+          it "(false, false) when taken down after publishing" do
+            @model.publish!
+            @model.take_down!
+            @model.has_unpublished_changes?.should be_false
+            @model.published?.should be_false
           end
 
         end

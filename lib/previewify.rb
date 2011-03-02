@@ -116,8 +116,12 @@ module Previewify
           self.class.published_version_class.take_down(id)
         end
 
+        def published?
+          latest_published.present?
+        end
+
         def has_unpublished_changes?
-          return false if latest_published.blank?
+          return false if !published?
           return latest_published.published_attributes != previewify_options.published_attributes(attributes)
         end
 
