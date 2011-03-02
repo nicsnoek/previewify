@@ -635,6 +635,38 @@ describe 'Previewify' do
           end
 
         end
+
+        describe ".to_ary" do
+
+          # This spec is the result of a non-obvious bug where flattening an array of class objects
+          # caused it to return an array with all published objects when in published mode
+
+          context "in preview mode" do
+
+            before :each do
+              show_preview(true)
+            end
+
+            it "creates array containing class" do
+              [@test_model_class].flatten.should == [@test_model_class]
+            end
+
+          end
+
+          context "in live mode" do
+
+            before :each do
+              show_preview(false)
+            end
+
+            it "creates array containing class" do
+              [@test_model_class].flatten.should == [@test_model_class]
+            end
+          end
+
+
+        end
+
       end
     end
   end
