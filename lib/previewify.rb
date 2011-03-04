@@ -92,9 +92,6 @@ module Previewify
         delegate :published_on, :to => :latest_published, :allow_nil => true
 
         def latest_published
-          primary_key_name = self.class.previewify_options.primary_key_attribute_name
-          primary_key_value = self.send(primary_key_name)
-
           self.class.published_version_class.latest_published_by_primary_key(primary_key_value)
         end
 
@@ -113,7 +110,7 @@ module Previewify
         end
 
         def take_down!
-          self.class.published_version_class.take_down(id)
+          self.class.published_version_class.take_down(primary_key_value)
         end
 
         def published?
@@ -126,11 +123,16 @@ module Previewify
         end
 
         def revert_to_version!(version_number)
-          version = self.class.published_version_class.specific_version_by_primary_key(id, version_number)
+          version = self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
           update_attributes!(version.published_attributes)
         end
 
         private
+
+        def primary_key_value
+          primary_key_name = self.class.previewify_options.primary_key_attribute_name
+          self.send(primary_key_name)
+        end
 
         def self.show_preview?
           Thread.current['Previewify::show_preview'] || false
@@ -238,8 +240,8 @@ module Previewify
           end
         end
 
-        def self.take_down(id_to_take_down)
-          take_down_candidate = latest_published_by_primary_key(id_to_take_down)
+        def self.take_down(pk_to_take_down)
+          take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
           take_down_candidate.try(:take_down!)
           take_down_candidate
         end
@@ -266,9 +268,3 @@ end
 
 ActiveRecord::Base.extend Previewify::ActiveRecord
 
-#require 'previewify/controller'
-#require 'previewify/activerecord'
-
-#if defined? Rails
-# include stuff?
-#end
