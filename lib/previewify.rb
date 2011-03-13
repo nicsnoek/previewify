@@ -95,6 +95,10 @@ module Previewify
           self.class.published_version_class.latest_published_by_primary_key(primary_key_value)
         end
 
+        def self.all(*args)
+          delegate_to_published_version ? published_version_class.all(*args) : super(*args)
+        end
+
         def self.find(*args)
           delegate_to_published_version ? published_version_class.find(*args) : super(*args)
         end

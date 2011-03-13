@@ -513,6 +513,7 @@ describe 'Previewify' do
               @test_model_class.find(:first, :conditions => {:content => 'At least a centi-litre'}).should be_nil
               @test_model_class.find(:all, :conditions => {:content => 'At least a centi-litre'}).should == []
               @test_model_class.find(:last, :conditions => {:content => 'At least a centi-litre'}).should be_nil
+              @test_model_class.all(:conditions => {:content => 'At least a centi-litre'}).should == []
             end
 
             it "finds published versions by id" do
@@ -569,6 +570,54 @@ describe 'Previewify' do
           end
 
 
+        end
+
+        describe ".all" do
+
+          context "in preview mode" do
+
+            before :each do
+              show_preview(true)
+              @test_model_class.delete_all
+            end
+
+            it "finds all previews" do
+              model1 = @test_model_class.create!(:name => 'My Name1', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name2', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              @test_model_class.all.should == [model1, model2]
+            end
+
+          end
+
+          context "in live mode" do
+
+            before :each do
+              show_preview(false)
+              @test_model_class.delete_all
+              @test_model_class.published_version_class.delete_all
+            end
+
+
+            it "finds all published models" do
+              model1 = @test_model_class.create!(:name => 'My Name1', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              model2 = @test_model_class.create!(:name => 'My Name2', :number => 5, :content => 'At least a cup', :float => 5.6, :active => false)
+              model1_published = model1.publish!
+              model2_published = model2.publish!
+              @test_model_class.all.should == [model1_published, model2_published]
+            end
+
+            it "does not find unpublished models" do
+              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a centi-litre', :float => 5.6, :active => false)
+              @test_model_class.all.should == []
+            end
+
+            it "does not find published models that have been taken down" do
+              model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a centi-litre', :float => 5.6, :active => false)
+              model.publish!
+              model.take_down!
+              @test_model_class.all.should == []
+            end
+          end
         end
 
         describe "dynamic finder" do
