@@ -8,6 +8,14 @@ ActiveRecord::Schema.define :version => 0 do
     t.boolean :active
   end
 
+  create_table :other_primary_key_test_models, :force => true, :primary_key => 'other_pk' do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.float :float
+    t.boolean :active
+  end
+
   create_table :other_published_class_name_test_models, :force => true do |t|
     t.string :name
     t.integer :number

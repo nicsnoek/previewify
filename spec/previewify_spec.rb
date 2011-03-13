@@ -32,6 +32,11 @@ describe 'Previewify' do
 
   end
 
+  class OtherPrimaryKeyTestModel < ActiveRecord::Base
+    set_primary_key 'other_pk'
+    previewify
+  end
+
   class OtherPublishedClassNameTestModel < ActiveRecord::Base
     previewify :published_version_class_name => 'PublishedModel'
   end
@@ -75,6 +80,11 @@ describe 'Previewify' do
   def default_previewified
     @test_model_class           = TestModel
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_published_versions')
+  end
+
+  def previewified_with_other_primary_key
+    @test_model_class           = OtherPrimaryKeyTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_primary_key_test_model_published_versions')
   end
 
   def previewified_with_other_published_flag
@@ -206,6 +216,7 @@ describe 'Previewify' do
   end
 
   ["default_previewified",
+   "previewified_with_other_primary_key",
    "previewified_with_other_published_flag",
    "previewified_with_preview_only_content",
    "previewified_with_other_published_class_name",

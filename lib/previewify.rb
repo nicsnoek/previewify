@@ -12,8 +12,9 @@ module Previewify
 
   class Options
 
-    def initialize(options_hash, preview_table_name, preview_columns)
+    def initialize(options_hash, primary_key_name, preview_table_name, preview_columns)
       @options_hash = options_hash
+      @primary_key_name = primary_key_name
       @preview_table_name = preview_table_name
       @preview_columns = preview_columns
     end
@@ -39,7 +40,7 @@ module Previewify
     end
 
     def primary_key_attribute_name
-      @options_hash[:primary_key] || 'id'
+      @primary_key_name
     end
 
     def published_on_attribute_name
@@ -157,7 +158,7 @@ module Previewify
     def previewify(options = {})
 
       cattr_accessor :previewify_options
-      self.previewify_options = ::Previewify::Options.new(options, table_name, columns)
+      self.previewify_options = ::Previewify::Options.new(options, primary_key, table_name, columns)
 
       include Previewify::InstanceMethods
 
