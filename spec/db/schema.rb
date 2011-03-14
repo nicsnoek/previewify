@@ -24,7 +24,7 @@ ActiveRecord::Schema.define :version => 0 do
     t.boolean :active
   end
 
-  create_table :extra_columns_test_models, :force => true do |t|
+  create_table :extra_preview_columns_test_models, :force => true do |t|
     t.string :name
     t.integer :number
     t.text :content

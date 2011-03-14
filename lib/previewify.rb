@@ -174,6 +174,8 @@ module Previewify
                                 :scale => published_column.scale,
                                 :precision => published_column.precision
         end
+        # TODO: Index on (primary_key, published_flag)
+        published_version_class.setup_scope_to_default_to_latest
       end
 
       def drop_published_versions_table
@@ -184,7 +186,16 @@ module Previewify
 
         set_table_name(previewify_options.published_version_table_name)
 
-        default_scope :conditions => ["#{previewify_options.published_flag_attribute_name} = true"]
+        def self.setup_scope_to_default_to_latest
+          default_scope :conditions => ["#{previewify_options.published_flag_attribute_name} = true"]
+        end
+
+        begin
+          setup_scope_to_default_to_latest
+        rescue
+          # published versions table does not exists,
+          # the scope will be re-created when the table is created.
+        end
 
         undef published_on #Must undefine published_on to avoid infinite recursion. This class defines its own published_on attribute
 
