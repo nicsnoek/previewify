@@ -287,6 +287,9 @@ describe 'Previewify' do
 
           before :each do
             @model           = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            @published_model_v1 = @model.publish!
+            @published_model_v2 = @model.publish!
+            @published_model_v2.take_down!
             @published_model = @model.publish!
           end
 
@@ -322,6 +325,10 @@ describe 'Previewify' do
 
           it ".specific_version_by_primary_key returns specified version" do
             @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model
+          end
+
+          it ".all_versions_by_primary_key retursn all versions" do
+            @published_model.class.all_versions_by_primary_key(@model.id).should == [@published_model_v1, @published_model_v2, @published_model]
           end
 
           it "#published_attributes only includes attributes published from preview object" do

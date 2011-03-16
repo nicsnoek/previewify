@@ -61,7 +61,18 @@ Once you have a preview version and you are happy with it you can call publish! 
   
   blog_post = BlogPost.find(1)
   blog_post.revert_to_version!(4)
-  
+
+
+The published version does not need to contain all the attributes that the preview version does. For example, the published version of an article may not need to store the editor's notes:
+
+  previewify :preview_only_attributes => :editors_notes
+
+To get information about the publication state of your object, you can use
+  blog_post.has_unpublished_changes?
+  blog_post.published?
+  and
+  blog_post.published_on
+
 === Controller
 
 Unlike other versioning gems Previewify uses controller filters to determine whether is should be showing a preview or the published version of your content. This allows you to easily write a filter so your preview will only be shown:
@@ -84,7 +95,18 @@ For example, you can then create a method in the controller that will determine 
     request.host.match(/preview/)
   end
 
-If the preview_url? method returns true then when you retrieve a previewable object it will return the draft version that is saved. When preview_url? returns false the latest published version will be returned.
+If the preview_url? method returns true then when you retrieve a previewable object it will return the preview version that is saved. When preview_url? returns false the latest published version will be returned.
+Dynamic finders will also honour the state set by show_preview:
+
+  eg. BlogPost.find_by_title('') will find preview versions by title if show_preview(false), or the latest published version if show_preview(true)
+
+It is possible to explicitly load the published version:
+
+    BlogPost.published_version_class.find_by_title('title') will only find the latest published versions with the given title
+
+    BlogPost.published_version_class.specific_version_by_primary_key(id, version) will find only the specific version for the given id.
+
+    BlogPost.published_version_class.all_versions_by_primary_key(1) will find all versions for id 1. Only the latest version will have the published_flag_attribute set to true.
 
 
 
@@ -94,7 +116,9 @@ In your model:
 
   class BlogPost < ActiveRecord::Base
     previewify :preview_only_methods => [:published_versions_by, :default_title],
+               :preview_only_attributes => [:editors_notes]
                :published_only_methods => [:cache]
+
 
     named_scope :old, :conditions => { :updated_at < 2.days.ago }
     named_scope :naughty, :conditions => ['body LIKE "%nipple%"']
@@ -103,7 +127,7 @@ In your model:
     validate :drafts_allowed, :if => :preview?
     validates_uniqueness_of :slug, :if => :published?
 
-    def self.default_title
+    def default_title
     end
 
     def title
@@ -116,37 +140,28 @@ In your model:
     end
   end
 
-  BlogPost.last.published_versions.by(user)
-
 In your controller:
 
   class ApplicationController
     before_filter :show_preview_or_live
 
     def show_preview_or_live
-      show_preview(preview_url?)
+      show_preview(admin_url?)
     end
 
-    def preview_url?
-      request.host.match(/preview/)
+    def admin_url?
+      request.host.match(/admin/)
     end
   end
 
   class BlogPostsController < ApplicationController
 
-    before_filter :load_blog_post, :only => [:show]
-    before_filter :load_blog_post_draft, :only => [:edit, :update]
-
     def show
     end
 
     def update
-      if @blog_post_draft.update_attributes(params[:blog_post_draft])
-        if @blog_post_draft.published?
-          redirect_to blog_post_url(@blog_post_draft)
-        else
-          redirect_to edit_blog_post_url(@blog_post_draft)
-        end
+      if @blog_post.update_attributes(params[:blog_post])
+        redirect_to blog_post_url(@blog_post_draft)
       else
         render 'edit'
       end

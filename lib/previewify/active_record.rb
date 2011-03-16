@@ -125,6 +125,12 @@ module Previewify
           end
         end
 
+        def self.all_versions_by_primary_key(primary_key_value)
+          with_exclusive_scope do
+            find(:all, :conditions => ["#{previewify_config.primary_key_attribute_name} = ?", primary_key_value])
+          end
+        end
+
         def self.take_down(pk_to_take_down)
           take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
           take_down_candidate.try(:take_down!)
