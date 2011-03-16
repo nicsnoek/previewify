@@ -742,7 +742,7 @@ describe 'Previewify' do
   end
 
   def is_published?(name)
-    @test_model_class.previewify_options.published_columns.include? name
+    @test_model_class.previewify_config.published_columns.include? name
   end
 
 

@@ -1,6 +1,6 @@
 module Previewify
 
-  class Options
+  class Config
 
     def initialize(options_hash, primary_key_name, preview_table_name, preview_columns)
       @options_hash = options_hash

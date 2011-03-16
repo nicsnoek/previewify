@@ -1,5 +1,4 @@
 module Previewify
-
   module Control
 
     def show_preview(show_preview = true)

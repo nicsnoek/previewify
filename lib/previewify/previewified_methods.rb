@@ -41,7 +41,7 @@ module Previewify
 
         def has_unpublished_changes?
           return false if !published?
-          return latest_published.published_attributes != previewify_options.published_attributes(attributes)
+          return latest_published.published_attributes != previewify_config.published_attributes(attributes)
         end
 
         def revert_to_version!(version_number)
@@ -52,7 +52,7 @@ module Previewify
         private
 
         def primary_key_value
-          primary_key_name = self.class.previewify_options.primary_key_attribute_name
+          primary_key_name = self.class.previewify_config.primary_key_attribute_name
           self.send(primary_key_name)
         end
 

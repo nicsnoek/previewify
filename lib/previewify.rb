@@ -1,5 +1,5 @@
 require 'previewify/control'
-require 'previewify/options'
+require 'previewify/config'
 require 'previewify/active_record'
 
 
