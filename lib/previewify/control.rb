@@ -1,13 +1,17 @@
 module Previewify
   module Control
 
-    def show_preview(show_preview = true)
-      Thread.current['Previewify::show_preview'] = show_preview
+    def show_preview(preview_mode = true)
+      Thread.current[KEY] = preview_mode
     end
 
     def show_preview?
-      Thread.current['Previewify::show_preview'] || false
+      Thread.current[KEY] || false
     end
+
+    private
+
+    KEY = 'Previewify::show_preview'
 
   end
 end

@@ -18,7 +18,7 @@ module Previewify
     end
 
       def published_flag_attribute_name
-      @options_hash[:published_flag_attribute_name] || 'latest'
+      @options_hash[:published_flag_attribute_name] || 'published'
     end
 
     def version_attribute_name

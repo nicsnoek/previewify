@@ -373,16 +373,19 @@ describe 'Previewify' do
             @published_test_model_table.create
           end
 
-          it "returns nil but does not raise exception if object is not published" do
+          it "does nothing on unpublished object" do
             model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            model.take_down!.should be_nil
+            model.published?.should be_false
+            model.take_down!
+            model.published?.should be_false
           end
 
-          it "returns taken down object and resets 'latest' flag on currently published object" do
+          it "causes currently published object to become unpublished" do
             model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             model.publish!
-            taken_down = model.take_down!
-            taken_down.latest.should be_false
+            model.published?.should be_true
+            model.take_down!
+            model.published?.should be_false
           end
 
         end
@@ -715,8 +718,9 @@ describe 'Previewify' do
 
         describe ".to_ary" do
 
-          # This spec is the result of a non-obvious bug where flattening an array of class objects
-          # caused it to return an array with all published objects when in published mode
+          # This behaviour spec is the result of a non-obvious bug where flattening an array of class objects
+          # caused it to return an array with all published objects when in published mode.
+          # That's what happens when you start messing with method_missing...
 
           context "in preview mode" do
 
