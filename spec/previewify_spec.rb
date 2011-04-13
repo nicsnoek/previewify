@@ -443,44 +443,117 @@ describe 'Previewify' do
 
         end
 
-        describe '(#has_unpublished_changes?, #published?)' do
+        describe '#published?' do
           before :each do
             @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           end
 
-          it "(false, false) when unpublished" do
-            @model.has_unpublished_changes?.should be_false
+          it "false when unpublished" do
             @model.published?.should be_false
           end
 
-          it "(false, true) when published without changes" do
-            @model.publish!
-            @model.has_unpublished_changes?.should be_false
+          it "true when published without changes" do
+            published_model = @model.publish!
             @model.published?.should be_true
+            published_model.published?.should be_true
           end
 
-          it "(true, true) when changes have been made without publishing" do
-            @model.publish!
+          it "true when changes have been made without saving or publishing" do
+            published_model = @model.publish!
             @model.name = 'Modified name'
-            @model.has_unpublished_changes?.should be_true
             @model.published?.should be_true
+            published_model.published?.should be_true
           end
 
-          it "(true, true) when changes have been saved without publishing" do
-            @model.publish!
+          it "true when changes have been saved without publishing" do
+            published_model = @model.publish!
             @model.name = 'Modified name'
             @model.save
-            @model.has_unpublished_changes?.should be_true
             @model.published?.should be_true
+            published_model.published?.should be_true
           end
 
-          it "(false, false) when taken down after publishing" do
-            @model.publish!
+          it "false when taken down after publishing" do
+            published_model = @model.publish!
             @model.take_down!
-            @model.has_unpublished_changes?.should be_false
             @model.published?.should be_false
+            published_model.published?.should be_false
           end
 
+        end
+
+        describe 'on preview model' do
+          describe '#has_unpublished_changes?' do
+            before :each do
+              @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            end
+
+            it "false when unpublished" do
+              @model.has_unpublished_changes?.should be_false
+            end
+
+            it "false when published without changes" do
+              @model.publish!
+              @model.has_unpublished_changes?.should be_false
+            end
+
+            it "true when changes have been made without publishing" do
+              @model.publish!
+              @model.name = 'Modified name'
+              @model.has_unpublished_changes?.should be_true
+            end
+
+            it "true when changes have been saved without publishing" do
+              @model.publish!
+              @model.name = 'Modified name'
+              @model.save
+              @model.has_unpublished_changes?.should be_true
+            end
+
+            it "false when taken down after publishing" do
+              @model.publish!
+              @model.take_down!
+              @model.has_unpublished_changes?.should be_false
+            end
+
+          end
+        end
+
+        describe 'on published model' do
+          describe '#has_unpublished_changes?' do
+            before :each do
+              @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            end
+
+            it "false when unpublished" do
+              @model.has_unpublished_changes?.should be_false
+            end
+
+            it "false when published without changes" do
+              published_model = @model.publish!
+              published_model.has_unpublished_changes?.should be_false
+            end
+
+            it "false when changes have been made without publishing" do
+              published_model = @model.publish!
+              @model.name = 'Modified name'
+              published_model.has_unpublished_changes?.should be_false
+            end
+
+            it "false when changes have been saved without publishing" do
+              published_model = @model.publish!
+              @model.name = 'Modified name'
+              @model.save
+              published_model.has_unpublished_changes?.should be_false
+            end
+
+            it "false when taken down after publishing" do
+              published_model = @model.publish!
+              @model.take_down!
+              published_model.has_unpublished_changes?.should be_false
+            end
+
+          end
         end
 
         describe ".find" do

@@ -6,20 +6,36 @@ module Previewify
     def create_published_versions_class
       const_set(previewify_config.published_version_class_name, Class.new(self)).class_eval do
 
-        set_table_name(previewify_config.published_version_table_name)
+        private
 
         def self.setup_scope_to_default_to_latest
           default_scope :conditions => "#{previewify_config.published_flag_attribute_name} = true"
         end
 
-        begin
-          setup_scope_to_default_to_latest
-        rescue
-          # published versions table does not exists,
-          # the default scope will be re-created when the table is created.
+        def self.make_attributes_read_only
+          columns.each { |column|
+            attr_readonly(column.name) unless column.name == previewify_config.published_flag_attribute_name
+          }
         end
 
-        undef published_on #Must undefine published_on to avoid infinite recursion. This class defines its own published_on attribute
+        public
+
+        set_table_name(previewify_config.published_version_table_name)
+
+        def self.perform_class_initialisation_that_requires_table_to_exist
+          setup_scope_to_default_to_latest
+          make_attributes_read_only
+        end
+
+
+        begin
+          perform_class_initialisation_that_requires_table_to_exist
+        rescue
+          # published versions table does not exists,
+          # the initialisation should be re-done when the table is created.
+        end
+
+        undef published_on #Must uninherit published_on to avoid infinite recursion. This class defines its own published_on attribute as a method_missing
 
         if previewify_config.preview_only_methods.present?
           previewify_config.preview_only_methods.each do |preview_only_method|
@@ -37,11 +53,6 @@ module Previewify
         end
 
         def self.publish(preview, version)
-          #Note: Can not set to readonly when .previewify is called as the published version table will not yet exist at that point'
-          self.columns.each { |column|
-            self.attr_readonly(column.name) unless column.name == previewify_config.published_flag_attribute_name
-          }
-
           attributes_to_publish = previewify_config.published_attributes(preview.attributes)
           attributes_to_publish.merge!(
               previewify_config.version_attribute_name => version,
@@ -64,6 +75,10 @@ module Previewify
           attributes.reject { |key|
             previewify_config.published_version_metainformation_attributes.include?(key)
           }
+        end
+
+        def has_unpublished_changes?
+          false
         end
 
         def self.latest_published_by_primary_key(primary_key_value)
