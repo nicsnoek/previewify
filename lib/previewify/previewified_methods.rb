@@ -41,12 +41,19 @@ module Previewify
 
         def has_unpublished_changes?
           return false if !published?
-          return latest_published.published_attributes != previewify_config.published_attributes(attributes)
+          return latest_published.published_attributes != self.published_attributes
         end
 
         def revert_to_version!(version_number)
           version = self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
           update_attributes!(version.published_attributes)
+        end
+
+        def published_attributes
+          return attributes if previewify_config.preview_only_attribute_names.blank?
+          attributes.reject { |key|
+            previewify_config.preview_only_attribute_names.include? key.to_sym
+          }
         end
 
         private

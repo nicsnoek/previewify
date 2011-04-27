@@ -9,7 +9,7 @@ module Previewify
     def previewify(options = {})
 
       cattr_accessor :previewify_config do
-        Previewify::Config.new(options, primary_key, table_name, columns)
+        Previewify::Config.new(options, primary_key, table_name)
       end
 
       def create_published_versions_table
@@ -18,7 +18,7 @@ module Previewify
           t.column previewify_config.published_flag_attribute_name, :boolean
           t.column previewify_config.published_on_attribute_name, :timestamp
         end
-        previewify_config.published_columns.each do |published_column|
+        published_columns.each do |published_column|
           connection.add_column previewify_config.published_version_table_name, published_column.name, published_column.type,
                                 :limit => published_column.limit,
                                 :scale => published_column.scale,
@@ -47,12 +47,21 @@ module Previewify
     private
 
     def remove_methods_that_are_for_published_class_only
-      if previewify_config.published_only_methods.present?
-        previewify_config.published_only_methods.each do |published_only_method|
+      if previewify_config.published_only_method_names.present?
+        previewify_config.published_only_method_names.each do |published_only_method|
           remove_method(published_only_method)
         end
       end
     end
+
+    def published_columns
+      return columns if previewify_config.preview_only_attribute_names.blank?
+      columns.reject { |column|
+        previewify_config.preview_only_attribute_names.include? column.name.to_sym
+      }
+    end
+
+
 
   end
 end

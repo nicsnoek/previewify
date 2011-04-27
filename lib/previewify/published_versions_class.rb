@@ -37,14 +37,14 @@ module Previewify
 
         undef published_on #Must uninherit published_on to avoid infinite recursion. This class defines its own published_on attribute as a method_missing
 
-        if previewify_config.preview_only_methods.present?
-          previewify_config.preview_only_methods.each do |preview_only_method|
+        if previewify_config.preview_only_method_names.present?
+          previewify_config.preview_only_method_names.each do |preview_only_method|
             undef_method(preview_only_method)
           end
         end
 
-        if previewify_config.published_only_methods.present?
-          previewify_config.published_only_methods.each do |published_only_method|
+        if previewify_config.published_only_method_names.present?
+          previewify_config.published_only_method_names.each do |published_only_method|
             class_variable_set("@@#{published_only_method}_method", self.instance_method(published_only_method))
             define_method("#{published_only_method}") do |*args|
               self.class.class_variable_get("@@#{published_only_method}_method").bind(self).call(*args)
@@ -53,7 +53,7 @@ module Previewify
         end
 
         def self.publish(preview, version)
-          attributes_to_publish = previewify_config.published_attributes(preview.attributes)
+          attributes_to_publish = preview.published_attributes
           attributes_to_publish.merge!(
               previewify_config.version_attribute_name => version,
               previewify_config.published_flag_attribute_name => true,
@@ -76,6 +76,7 @@ module Previewify
             previewify_config.published_version_metainformation_attributes.include?(key)
           }
         end
+
 
         def has_unpublished_changes?
           false

@@ -152,7 +152,7 @@ describe 'Previewify' do
 
           it "has all published columns of the draft version" do
             @test_model_class.columns.each do |column|
-              if is_published? column
+              if is_published? column.name
                 @published_test_model_table.should have_column(column.name)
                 @published_test_model_table.column_type(column.name).should == column.type
               end
@@ -826,7 +826,7 @@ describe 'Previewify' do
   end
 
   def is_published?(name)
-    @test_model_class.previewify_config.published_columns.include? name
+    @test_model_class.published_version_class.columns.include? name
   end
 
 
