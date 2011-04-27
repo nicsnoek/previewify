@@ -57,7 +57,7 @@ module Previewify
           attributes_to_publish.merge!(
               previewify_config.version_attribute_name => version,
               previewify_config.published_flag_attribute_name => true,
-              :published_on => Time.now
+              previewify_config.published_on_attribute_name => Time.now
           )
           published_version = self.new(attributes_to_publish)
           if preview.respond_to?(:id)
