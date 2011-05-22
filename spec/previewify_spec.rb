@@ -12,10 +12,12 @@ ActiveRecord::Base.logger.level = Logger::DEBUG
 
 require 'db/schema'
 
-include Previewify::Control
-
 
 describe 'Previewify' do
+
+  def show_preview preview_mode
+    Thread.current['Previewify::show_preview'] = preview_mode
+  end
 
 
   class TestModel < ActiveRecord::Base
@@ -458,11 +460,11 @@ describe 'Previewify' do
             published_model.published?.should be_true
           end
 
-          it "true when changes have been made without saving or publishing" do
+          it "is true for a published version that has been found by a finder" do
             published_model = @model.publish!
-            @model.name = 'Modified name'
-            @model.published?.should be_true
-            published_model.published?.should be_true
+            show_preview(false)
+            retrieved_published_model = @test_model_class.find(@model.id)
+            retrieved_published_model.published?.should be_true
           end
 
           it "true when changes have been saved without publishing" do
@@ -477,7 +479,6 @@ describe 'Previewify' do
             published_model = @model.publish!
             @model.take_down!
             @model.published?.should be_false
-            published_model.published?.should be_false
           end
 
         end

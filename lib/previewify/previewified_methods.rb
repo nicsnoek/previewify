@@ -64,7 +64,7 @@ module Previewify
         end
 
         def self.delegate_to_published_version
-          !Previewify::Control.show_preview? && self != published_version_class
+          !Control.show_preview? && self != published_version_class
         end
 
       end
