@@ -25,7 +25,7 @@ module Previewify
                                 :precision => published_column.precision
         end
         # TODO: Index on (primary_key, published_flag)
-        published_version_class.perform_class_initialisation_that_requires_table_to_exist
+        published_version_class.perform_class_initialisation_that_requires_table_to_exist()
       end
 
       def drop_published_versions_table

@@ -22,18 +22,17 @@ module Previewify
 
         set_table_name(previewify_config.published_version_table_name)
 
+
         def self.perform_class_initialisation_that_requires_table_to_exist
-          setup_scope_to_default_to_latest
-          make_attributes_read_only
+          #If this setup can not run because the table does not exits yet, it must be run after the table is created.
+          if connection.tables.include?(previewify_config.published_version_table_name)
+            setup_scope_to_default_to_latest
+            make_attributes_read_only
+          end
         end
 
 
-        begin
-          perform_class_initialisation_that_requires_table_to_exist
-        rescue
-          # published versions table does not exists,
-          # the initialisation should be re-done when the table is created.
-        end
+        perform_class_initialisation_that_requires_table_to_exist()
 
         undef published_on #Must uninherit published_on to avoid infinite recursion. This class defines its own published_on attribute as a method_missing
 
