@@ -18,9 +18,18 @@ module Previewify
           }
         end
 
+        def self.create(attributes)
+          instance = self.new(attributes)
+          #primary key is never mass assigned, so do it separately:
+          instance.send(previewify_config.mapped_primary_key_name.to_s+'=', attributes[previewify_config.primary_key_name])
+          instance.save!
+          return instance
+        end
+
         public
 
         set_table_name(previewify_config.published_version_table_name)
+        set_primary_key(previewify_config.published_version_primary_key_name)
 
 
         def self.perform_class_initialisation_that_requires_table_to_exist
@@ -58,16 +67,14 @@ module Previewify
               previewify_config.published_flag_attribute_name => true,
               previewify_config.published_on_attribute_name => Time.now
           )
-          published_version = self.new(attributes_to_publish)
-          if preview.respond_to?(:id)
-            published_version.id = preview.id # won't mass-assign
-          end
-          published_version.save!
-          return published_version
+
+          self.create(attributes_to_publish)
         end
 
         def take_down!
+          @published_version_id = true
           update_attribute(previewify_config.published_flag_attribute_name, false)
+          @published_version_id = false
         end
 
         def published_attributes
@@ -76,24 +83,39 @@ module Previewify
           }
         end
 
+        def published?
+          true
+        end
 
         def has_unpublished_changes?
           false
         end
 
+        def id
+          if new_record?
+            nil
+          else
+            if @published_version_id
+              return send(previewify_config.published_version_primary_key_name)
+            else
+              send(previewify_config.mapped_primary_key_name)
+            end
+          end
+        end
+
         def self.latest_published_by_primary_key(primary_key_value)
-          find(:first, :conditions => ["#{previewify_config.primary_key_attribute_name} = ?", primary_key_value])
+          find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
         end
 
         def self.specific_version_by_primary_key(primary_key_value, version_number)
           with_exclusive_scope do
-            find(:first, :conditions => ["#{previewify_config.primary_key_attribute_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number])
+            find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number])
           end
         end
 
         def self.all_versions_by_primary_key(primary_key_value)
           with_exclusive_scope do
-            find(:all, :conditions => ["#{previewify_config.primary_key_attribute_name} = ?", primary_key_value])
+            find(:all, :conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
           end
         end
 

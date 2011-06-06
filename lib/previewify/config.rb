@@ -24,21 +24,29 @@ module Previewify
       'version'
     end
 
-    def published_version_primary_key_attribute_name
-      'published_id'
-    end
-
-    def primary_key_attribute_name
-      @primary_key_name
-    end
-
     def published_on_attribute_name
       'published_on'
     end
 
+    def published_version_primary_key_name
+      'published_id'
+    end
+
+    def mapped_name_for_id
+      'original_id'
+    end
+
+    def mapped_primary_key_name
+      @primary_key_name == 'id' ? mapped_name_for_id : @primary_key_name
+    end
+
+    def primary_key_name
+      @primary_key_name
+    end
+
     def published_version_metainformation_attributes
       [
-          published_version_primary_key_attribute_name,
+          published_version_primary_key_name,
           version_attribute_name,
           published_flag_attribute_name,
           published_on_attribute_name

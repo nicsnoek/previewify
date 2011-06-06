@@ -18,7 +18,34 @@ module Previewify
         end
 
         def self.find(*args)
-          delegate_to_published_version ? published_version_class.find(*args) : super(*args)
+          if !delegate_to_published_version
+            super(*args)
+          else
+            found = super(*args)
+            raise ::ActiveRecord::RecordNotFound if args_is_ids(args) && !has_latest_published(found)
+            return nil unless found.present?
+            latest_published_from(found)
+          end
+        end
+
+        def self.args_is_ids(args)
+          !(args.last.is_a?(Hash) && args.last.extractable_options?)
+        end
+
+        def self.latest_published_from(result)
+          if result.is_a? Array
+            result.map(&:latest_published).compact
+          else
+            result.latest_published
+          end
+        end
+
+        def self.has_latest_published(result)
+          if result.is_a? Array
+            result.all?{|item| item.latest_published.present?}
+          else
+            result.latest_published.present?
+          end
         end
 
         def self.method_missing(*args)
@@ -41,12 +68,12 @@ module Previewify
 
         def has_unpublished_changes?
           return false if !published?
-          return latest_published.published_attributes != self.published_attributes
+          return latest_published.published_attributes_excluding_primary_key != self.published_attributes_excluding_primary_key
         end
 
         def revert_to_version!(version_number)
           version = self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
-          update_attributes!(version.published_attributes)
+          update_attributes!(version.published_attributes_excluding_primary_key)
         end
 
         def published_attributes
@@ -56,11 +83,18 @@ module Previewify
           }
         end
 
+        def published_attributes_excluding_primary_key
+          #TODO: what to do about 'id' ?'
+          published_attributes.reject{|name| name == previewify_config.mapped_name_for_id || name == 'id' }
+        end
+
         private
 
+
         def primary_key_value
-          primary_key_name = self.class.previewify_config.primary_key_attribute_name
-          self.send(primary_key_name)
+#          primary_key_name = self.class.previewify_config.primary_key_attribute_name
+          self.send(:id)
+          #Note: ActiveRecord always maps pk to id
         end
 
         def self.delegate_to_published_version

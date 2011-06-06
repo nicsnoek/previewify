@@ -13,5 +13,6 @@ group :development do
   gem "rcov", ">= 0"
   gem 'rails', '3.0.3'
   gem 'mysql', '2.8.1'
+  gem 'pg'
 end
 

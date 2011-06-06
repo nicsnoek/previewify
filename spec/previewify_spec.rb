@@ -10,6 +10,7 @@ ActiveRecord::Base.establish_connection('test')
 ActiveRecord::Base.logger       = Logger.new(STDOUT)
 ActiveRecord::Base.logger.level = Logger::DEBUG
 
+require 'db/drop_published_versions'
 require 'db/schema'
 
 
@@ -113,6 +114,112 @@ describe 'Previewify' do
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_published_method_test_model_published_versions')
   end
 
+  it "preview only columns are not available on published object" do
+    previewified_with_preview_only_content
+    @published_test_model_table.create
+    model           = @test_model_class.create!(
+        :name               => 'Original Name',
+        :number             => 5,
+        :content            => 'At least a litre',
+        :extra_content      => 'And another litre',
+        :more_extra_content => 'And one little wafer',
+        :float              => 5.6,
+        :active             => false)
+    published_model = model.publish!
+
+
+    lambda {
+      published_model.extra_content
+    }.should raise_error NoMethodError
+
+    lambda {
+      published_model.more_extra_content
+    }.should raise_error NoMethodError
+  end
+
+  context "method that should be available on draft and preview" do
+
+    before :each do
+      default_previewified
+      @published_test_model_table.create
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+    it "is available on preview version" do
+      @model.should respond_to :some_method_for_both
+      @model.should respond_to :another_method_for_both
+      @model.some_method_for_both("test value")
+      @model.another_method_for_both.should == "test value"
+    end
+
+    it "is available on published version" do
+      @published_model.should respond_to :some_method_for_both
+      @published_model.should respond_to :another_method_for_both
+      @published_model.some_method_for_both("test value")
+      @published_model.another_method_for_both.should == "test value"
+    end
+  end
+
+  context "method that should be only available on preview" do
+
+    before :each do
+      extra_preview_method_previewified
+      @published_test_model_table.create
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+    it "is only available on preview version" do
+      @model.should respond_to :some_method_for_preview
+      @model.should respond_to :another_method_for_preview
+      @model.some_method_for_preview("a test value")
+      @model.another_method_for_preview.should == "a test value"
+    end
+
+    it "is not available on published version" do
+      @published_model.should_not respond_to :some_method_for_preview
+      @published_model.should_not respond_to :another_method_for_preview
+    end
+  end
+
+  context "method that should be only available on published" do
+
+    before :each do
+      extra_published_method_previewified
+      @published_test_model_table.create
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      @published_model = @model.publish!
+    end
+
+    it "is not available on preview version" do
+      @model.should_not respond_to :some_method_for_published
+      @model.should_not respond_to :another_method_for_published
+    end
+
+    it "is only available on published version" do
+      @published_model.should respond_to :some_method_for_published
+      @published_model.should respond_to :another_method_for_published
+      @published_model.some_method_for_published("test argument value")
+      @published_model.another_method_for_published.should == "test argument value"
+    end
+  end
+
   ["default_previewified",
    "previewified_with_other_primary_key",
    "previewified_with_other_published_flag",
@@ -120,13 +227,18 @@ describe 'Previewify' do
    "previewified_with_other_published_class_name",
    "extra_preview_method_previewified",
    "extra_published_method_previewified"].each do |previewified_type|
-#    ["default_previewified"].each do |previewified_type|
     context "behaviour for #{previewified_type}" do
 
 
       before :all do
         eval(previewified_type)
       end
+#    context "behaviour for default_previewified" do
+#
+#
+#      before :all do
+#        eval('previewified_with_other_primary_key')
+#      end
 
 
       describe ".create_published_versions_table" do
@@ -181,110 +293,6 @@ describe 'Previewify' do
           @published_test_model_table.create
         end
 
-
-        it "preview only columns are not available on published object" do
-          previewified_with_preview_only_content
-          @published_test_model_table.create
-          model           = @test_model_class.create!(
-              :name               => 'Original Name',
-              :number             => 5,
-              :content            => 'At least a litre',
-              :extra_content      => 'And another litre',
-              :more_extra_content => 'And one little wafer',
-              :float              => 5.6,
-              :active             => false)
-          published_model = model.publish!
-
-
-          lambda {
-            published_model.extra_content
-          }.should raise_error NoMethodError
-
-          lambda {
-            published_model.more_extra_content
-          }.should raise_error NoMethodError
-        end
-
-        context "method that should be available on draft and preview" do
-
-          before :each do
-            default_previewified
-            @model           = @test_model_class.create!(
-                :name               => 'Original Name',
-                :number             => 5,
-                :content            => 'At least a litre',
-                :float              => 5.6,
-                :active             => false)
-            @published_model = @model.publish!
-          end
-
-          it "is available on preview version" do
-            @model.should respond_to :some_method_for_both
-            @model.should respond_to :another_method_for_both
-            @model.some_method_for_both("test value")
-            @model.another_method_for_both.should == "test value"
-          end
-
-          it "is available on published version" do
-            @published_model.should respond_to :some_method_for_both
-            @published_model.should respond_to :another_method_for_both
-            @published_model.some_method_for_both("test value")
-            @published_model.another_method_for_both.should == "test value"
-          end
-        end
-
-        context "method that should be only available on preview" do
-
-          before :each do
-            extra_preview_method_previewified
-            @model           = @test_model_class.create!(
-                :name               => 'Original Name',
-                :number             => 5,
-                :content            => 'At least a litre',
-                :float              => 5.6,
-                :active             => false)
-            @published_model = @model.publish!
-          end
-
-          it "is only available on preview version" do
-            @model.should respond_to :some_method_for_preview
-            @model.should respond_to :another_method_for_preview
-            @model.some_method_for_preview("a test value")
-            @model.another_method_for_preview.should == "a test value"
-          end
-
-          it "is not available on published version" do
-            @published_model.should_not respond_to :some_method_for_preview
-            @published_model.should_not respond_to :another_method_for_preview
-          end
-        end
-
-        context "method that should be only available on published" do
-
-          before :each do
-            extra_published_method_previewified
-            @model           = @test_model_class.create!(
-                :name               => 'Original Name',
-                :number             => 5,
-                :content            => 'At least a litre',
-                :float              => 5.6,
-                :active             => false)
-            @published_model = @model.publish!
-          end
-
-          it "is not available on preview version" do
-            @model.should_not respond_to :some_method_for_published
-            @model.should_not respond_to :another_method_for_published
-          end
-
-          it "is only available on published version" do
-            @published_model.should respond_to :some_method_for_published
-            @published_model.should respond_to :another_method_for_published
-            @published_model.some_method_for_published("test argument value")
-            @published_model.another_method_for_published.should == "test argument value"
-          end
-        end
-
         context "a published object" do
 
           before :each do
@@ -326,10 +334,10 @@ describe 'Previewify' do
           end
 
           it ".specific_version_by_primary_key returns specified version" do
-            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model
+            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model_v1
           end
 
-          it ".all_versions_by_primary_key retursn all versions" do
+          it ".all_versions_by_primary_key returns all versions" do
             @published_model.class.all_versions_by_primary_key(@model.id).should == [@published_model_v1, @published_model_v2, @published_model]
           end
 

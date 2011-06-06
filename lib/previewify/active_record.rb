@@ -13,13 +13,14 @@ module Previewify
       end
 
       def create_published_versions_table
-        connection.create_table(previewify_config.published_version_table_name, :primary_key => previewify_config.published_version_primary_key_attribute_name) do |t|
+        connection.create_table(previewify_config.published_version_table_name, :primary_key => previewify_config.published_version_primary_key_name) do |t|
           t.column previewify_config.version_attribute_name, :integer
           t.column previewify_config.published_flag_attribute_name, :boolean
           t.column previewify_config.published_on_attribute_name, :timestamp
         end
         published_columns.each do |published_column|
-          connection.add_column previewify_config.published_version_table_name, published_column.name, published_column.type,
+          published_column_name = published_column.name == 'id' ? previewify_config.mapped_name_for_id : published_column.name
+          connection.add_column previewify_config.published_version_table_name, published_column_name, published_column.type,
                                 :limit => published_column.limit,
                                 :scale => published_column.scale,
                                 :precision => published_column.precision

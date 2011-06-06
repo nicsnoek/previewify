@@ -1,6 +1,14 @@
 test:
-  adapter: mysql
+  adapter: postgresql
+  encoding: unicode
   database: previewify_test
-  username: root
-  password:
-  host: localhost
+  pool: 5
+  username: pg_test
+  password: password
+
+
+#  adapter: mysql
+#  database: previewify_test
+#  username: root
+#  password:
+#  host: localhost
