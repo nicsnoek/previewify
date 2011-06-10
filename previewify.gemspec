@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = "previewify"
-  s.version     = "0.2.0"
+  s.version     = "0.2.1"
   s.author      = "Nic Snoek"
   s.email       = "nicsnoek@yahoo.com"
   s.homepage    = "http://github.com/nicsnoek/previewify"
