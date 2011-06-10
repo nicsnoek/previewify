@@ -6,6 +6,9 @@ require 'previewify/published_versions_class'
 module Previewify
   module ActiveRecord
 
+    class RecordNotPublished < RuntimeError
+    end
+
     def previewify(options = {})
 
       cattr_accessor :previewify_config do

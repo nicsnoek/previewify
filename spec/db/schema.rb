@@ -8,6 +8,15 @@ ActiveRecord::Schema.define :version => 0 do
     t.boolean :active
   end
 
+  create_table :test_model_with_validations, :force => true do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.text :extra_content
+    t.float :float
+    t.boolean :active
+  end
+
   create_table :other_primary_key_test_models, :force => true, :primary_key => 'other_pk' do |t|
     t.string :name
     t.integer :number

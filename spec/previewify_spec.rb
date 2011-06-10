@@ -35,6 +35,15 @@ describe 'Previewify' do
 
   end
 
+  class TestModelWithValidation < ActiveRecord::Base
+
+    validates_presence_of :name
+    validates_presence_of :extra_content
+
+    previewify :preview_only_attributes => [:extra_content]
+
+  end
+
   class OtherPrimaryKeyTestModel < ActiveRecord::Base
     set_primary_key 'other_pk'
     previewify
@@ -82,6 +91,11 @@ describe 'Previewify' do
   def default_previewified
     @test_model_class           = TestModel
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_published_versions')
+  end
+
+  def default_previewified_with_validation
+    @test_model_class           = TestModelWithValidation
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_with_validation_published_versions')
   end
 
   def previewified_with_other_primary_key
@@ -137,7 +151,7 @@ describe 'Previewify' do
     }.should raise_error NoMethodError
   end
 
-  context "method that should be available on draft and preview" do
+  describe "method that should be available on draft and preview" do
 
     before :each do
       default_previewified
@@ -166,7 +180,7 @@ describe 'Previewify' do
     end
   end
 
-  context "method that should be only available on preview" do
+  describe "method that should be only available on preview" do
 
     before :each do
       extra_preview_method_previewified
@@ -193,7 +207,7 @@ describe 'Previewify' do
     end
   end
 
-  context "method that should be only available on published" do
+  describe "method that should be only available on published" do
 
     before :each do
       extra_published_method_previewified
@@ -220,6 +234,37 @@ describe 'Previewify' do
     end
   end
 
+  context "with a validation error" do
+    before :each do
+      default_previewified_with_validation
+      @published_test_model_table.create
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :extra_content      => 'And another litre',
+          :float              => 5.6,
+          :active             => false)
+    end
+    describe "#publish!" do
+      
+      it "should raise RecordNotPublished if the error is on a published attribute" do
+        @model.name = nil
+        lambda {
+          @model.publish!
+        }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
+      end
+
+      it "should raise RecordNotPublished if the error is on a unpublished attribute" do
+        @model.extra_content = nil
+        @model.name = nil
+        lambda {
+          @model.publish!
+        }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
+      end
+    end
+  end
+
   ["default_previewified",
    "previewified_with_other_primary_key",
    "previewified_with_other_published_flag",
@@ -240,6 +285,19 @@ describe 'Previewify' do
 #        eval('previewified_with_other_primary_key')
 #      end
 
+      context "an unsaved model" do
+        it "should " do
+          model           = @test_model_class.new(
+              :name               => 'Original Name',
+              :number             => 5,
+              :content            => 'At least a litre',
+              :float              => 5.6,
+              :active             => false)
+          lambda {
+            model.publish!
+          }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
+        end
+      end
 
       describe ".create_published_versions_table" do
 
@@ -489,6 +547,30 @@ describe 'Previewify' do
             @model.published?.should be_false
           end
 
+        end
+
+        describe "#id" do
+          it "should be the same on preview and all published versions" do
+            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            published_model1 = model.publish!
+            published_model2 = model.publish!
+            #Note: This shows that there is something suspect about the published model: All versions have the same id! This is because they
+            #should all be able to masquerade as the preview version. They all have a different "published_id"
+            published_model1.id.should == model.id
+            published_model2.id.should == model.id
+          end
+
+          it "should be the same on preview and all published versions even if take down has a problem" do
+            begin
+            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            published_model = model.publish!
+            published_model.stub(:create_or_update).and_raise(RuntimeError)
+            published_model.take_down!
+            ::RSpec::Expectations.fail_with("Should have thrown an exception")
+            rescue RuntimeError => e
+              published_model.id.should == model.id
+            end
+          end
         end
 
         describe 'on preview model' do
@@ -783,19 +865,36 @@ describe 'Previewify' do
 
         end
 
-        describe "#revert_to_version" do
+        context "with multiple versions" do
 
-          it "reverts preview to specified version" do
-            model = @test_model_class.create!(:name => 'My Name', :number => 10, :content => 'At least a litre', :float => 5.6, :active => false)
-            model.publish! #version 1
-            model.number = 20
-            model.publish! #version 2
-            model.revert_to_version!(1)
-            model.number.should == 10
-            model.revert_to_version!(2)
-            model.number.should == 20
+          before :each do
+            @model = @test_model_class.create!(:name => 'My Name', :number => 10, :content => 'At least a litre', :float => 5.6, :active => false)
+            @model.publish! #version 1
+            @model.number = 20
+            @model.publish! #version 2
           end
 
+          describe "#versions" do
+            it "returns all published versions" do
+              versions = @model.versions
+              versions.length.should == 2
+              versions[0].version.should == 1
+              versions[0].number.should == 10
+              versions[1].version.should == 2
+              versions[1].number.should == 20
+            end
+          end
+
+          describe "#revert_to_version" do
+
+            it "reverts preview to specified version" do
+              @model.revert_to_version!(1)
+              @model.number.should == 10
+              @model.revert_to_version!(2)
+              @model.number.should == 20
+            end
+
+          end
         end
 
         describe ".to_ary" do

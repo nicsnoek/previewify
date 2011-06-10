@@ -18,14 +18,6 @@ module Previewify
           }
         end
 
-        def self.create(attributes)
-          instance = self.new(attributes)
-          #primary key is never mass assigned, so do it separately:
-          instance.send(previewify_config.mapped_primary_key_name.to_s+'=', attributes[previewify_config.primary_key_name])
-          instance.save!
-          return instance
-        end
-
         public
 
         set_table_name(previewify_config.published_version_table_name)
@@ -60,21 +52,8 @@ module Previewify
           end
         end
 
-        def self.publish(preview, version)
-          attributes_to_publish = preview.published_attributes
-          attributes_to_publish.merge!(
-              previewify_config.version_attribute_name => version,
-              previewify_config.published_flag_attribute_name => true,
-              previewify_config.published_on_attribute_name => Time.now
-          )
-
-          self.create(attributes_to_publish)
-        end
-
         def take_down!
-          @published_version_id = true
           update_attribute(previewify_config.published_flag_attribute_name, false)
-          @published_version_id = false
         end
 
         def published_attributes
@@ -91,16 +70,49 @@ module Previewify
           false
         end
 
+        def with_published_id
+          @with_published_id = true
+          return yield
+        ensure
+          @with_published_id = false
+        end
+
         def id
-          if new_record?
-            nil
+          if @with_published_id
+            send(previewify_config.published_version_primary_key_name)
           else
-            if @published_version_id
-              return send(previewify_config.published_version_primary_key_name)
-            else
-              send(previewify_config.mapped_primary_key_name)
-            end
+            send(previewify_config.mapped_primary_key_name)
           end
+        end
+
+        def save_with_published_id(*args)
+          with_published_id do
+            save_without_published_id(*args)
+          end
+        end
+
+        alias_method_chain :save, :published_id
+
+        def self.publish(preview, version)
+          raise(RecordNotPublished) unless preview.valid?
+          attributes_to_publish = preview.published_attributes
+          attributes_to_publish.merge!(
+              previewify_config.version_attribute_name => version,
+              previewify_config.published_flag_attribute_name => true,
+              previewify_config.published_on_attribute_name => Time.now
+          )
+
+          instance = self.new(attributes_to_publish)
+          #primary key is never mass assigned, so do it separately:
+          instance.send(previewify_config.mapped_primary_key_name.to_s+'=', attributes_to_publish[previewify_config.primary_key_name])
+          instance.save || raise(RecordNotPublished)
+          return instance
+        end
+
+        def self.take_down(pk_to_take_down)
+          take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
+          take_down_candidate.try(:take_down!)
+          return take_down_candidate
         end
 
         def self.latest_published_by_primary_key(primary_key_value)
@@ -117,12 +129,6 @@ module Previewify
           with_exclusive_scope do
             find(:all, :conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
           end
-        end
-
-        def self.take_down(pk_to_take_down)
-          take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
-          take_down_candidate.try(:take_down!)
-          take_down_candidate
         end
 
       end
