@@ -68,5 +68,14 @@ ActiveRecord::Schema.define :version => 0 do
     t.boolean :active
   end
 
+  create_table :other_published_version_pk_test_models, :force => true do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.float :float
+    t.boolean :active
+  end
+
+
 
 end

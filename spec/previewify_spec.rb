@@ -88,6 +88,10 @@ describe 'Previewify' do
 
   end
 
+  class OtherPublishedVersionPkTestModel < ActiveRecord::Base
+    previewify :published_version_primary_key_name => 'zippy_id'
+  end
+
   def default_previewified
     @test_model_class           = TestModel
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_published_versions')
@@ -126,6 +130,11 @@ describe 'Previewify' do
   def extra_published_method_previewified
     @test_model_class           = ExtraPublishedMethodTestModel
     @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_published_method_test_model_published_versions')
+  end
+
+  def other_published_version_pk_previewified
+    @test_model_class           = OtherPublishedVersionPkTestModel
+    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_version_pk_test_model_published_versions', 'zippy_id')
   end
 
   it "preview only columns are not available on published object" do
@@ -265,13 +274,30 @@ describe 'Previewify' do
     end
   end
 
+  context "with other published_version_primary_key_name" do
+    it "should have configured primary key on published version" do
+      other_published_version_pk_previewified
+      @published_test_model_table.create
+      @model           = @test_model_class.create!(
+          :name               => 'Original Name',
+          :number             => 5,
+          :content            => 'At least a litre',
+          :float              => 5.6,
+          :active             => false)
+      published_version = @model.publish!
+      published_version.zippy_id.should == 1
+    end
+  end
+
   ["default_previewified",
    "previewified_with_other_primary_key",
    "previewified_with_other_published_flag",
    "previewified_with_preview_only_content",
    "previewified_with_other_published_class_name",
    "extra_preview_method_previewified",
-   "extra_published_method_previewified"].each do |previewified_type|
+   "extra_published_method_previewified",
+   "other_published_version_pk_previewified"
+  ].each do |previewified_type|
     context "behaviour for #{previewified_type}" do
 
 
@@ -318,8 +344,8 @@ describe 'Previewify' do
             @published_test_model_table.should have_column("version", :integer)
           end
 
-          it "has an published_id column by default" do
-            @published_test_model_table.should have_column("published_id", :integer)
+          it "has an primary_key column by default" do
+            @published_test_model_table.should have_published_primary_key_column(:integer)
           end
 
           it "has all published columns of the draft version" do
@@ -545,6 +571,32 @@ describe 'Previewify' do
             published_model = @model.publish!
             @model.take_down!
             @model.published?.should be_false
+          end
+
+        end
+
+        describe '#version' do
+          before :each do
+            @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          end
+
+          it "nil when unpublished" do
+            @model.version.should be_nil
+          end
+
+          it "nil when taken down" do
+            @model.publish!
+            @model.take_down!
+            @model.version.should be_nil
+          end
+
+          it "reflects the latest published version" do
+            published_version1 = @model.publish!
+            @model.version.should == 1
+            published_version1.version.should == 1
+            published_version2 = @model.publish!
+            @model.version.should == 2
+            published_version2.version.should == 2
           end
 
         end
@@ -933,37 +985,4 @@ describe 'Previewify' do
     end
   end
 
-  def is_published?(name)
-    @test_model_class.published_version_class.columns.include? name
-  end
-
-
-  class PublishedTestModelTable
-
-    def initialize(model_class, published_versions_table_name)
-      @model_class                   = model_class
-      @published_versions_table_name = published_versions_table_name
-    end
-
-    def in_existence?
-      @model_class.connection.tables.include?(@published_versions_table_name)
-    end
-
-    def drop
-      @model_class.connection.execute("drop table #{@published_versions_table_name};") if in_existence?
-    end
-
-    def create
-      @model_class.create_published_versions_table if !in_existence?
-    end
-
-    def has_column?(name, type = nil)
-      @model_class.connection.column_exists?(@published_versions_table_name, name, type)
-    end
-
-    def column_type(name)
-      @model_class.columns_hash[name].type
-    end
-
-  end
 end

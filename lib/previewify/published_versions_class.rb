@@ -32,10 +32,17 @@ module Previewify
           end
         end
 
+        def self.uninherit_preview_methods_for_published_attributes
+        # Uninherit methods from the preview version that delegate to attributes of the published version
+        # otherwise they will cause infinite recursion.
+          undef_method(previewify_config.version_attribute_name)
+          undef_method(previewify_config.published_on_attribute_name)
+        end
+
 
         perform_class_initialisation_that_requires_table_to_exist()
 
-        undef published_on #Must uninherit published_on to avoid infinite recursion. This class defines its own published_on attribute as a method_missing
+        uninherit_preview_methods_for_published_attributes()
 
         if previewify_config.preview_only_method_names.present?
           previewify_config.preview_only_method_names.each do |preview_only_method|
@@ -97,7 +104,7 @@ module Previewify
           raise(RecordNotPublished) unless preview.valid?
           attributes_to_publish = preview.published_attributes
           attributes_to_publish.merge!(
-              previewify_config.version_attribute_name => version,
+                previewify_config.version_attribute_name => version,
               previewify_config.published_flag_attribute_name => true,
               previewify_config.published_on_attribute_name => Time.now
           )

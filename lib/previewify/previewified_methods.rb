@@ -7,7 +7,8 @@ module Previewify
 
       target.class_eval do
 
-        delegate :published_on, :to => :latest_published, :allow_nil => true
+        delegate previewify_config.published_on_attribute_name, :to => :latest_published, :allow_nil => true
+        delegate previewify_config.version_attribute_name, :to => :latest_published, :allow_nil => true
 
         def latest_published
           self.class.published_version_class.latest_published_by_primary_key(primary_key_value)

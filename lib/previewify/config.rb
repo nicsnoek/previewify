@@ -29,7 +29,7 @@ module Previewify
     end
 
     def published_version_primary_key_name
-      'published_id'
+      @options_hash[:published_version_primary_key_name] || 'published_id'
     end
 
     def mapped_name_for_id
