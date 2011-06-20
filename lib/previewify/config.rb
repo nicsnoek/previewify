@@ -21,7 +21,7 @@ module Previewify
     end
 
     def version_attribute_name
-      'version'
+      'version_number'
     end
 
     def published_on_attribute_name

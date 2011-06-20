@@ -56,12 +56,16 @@ module Previewify
         def publish!
           raise ::Previewify::ActiveRecord::RecordNotPublished if new_record?
           latest_published = take_down!
-          latest_published_version = latest_published.try(:version) || 0
+          latest_published_version = latest_published.present? ? latest_published.send(previewify_config.version_attribute_name) : 0
           self.class.published_version_class.publish(self, latest_published_version + 1)
         end
 
         def versions
           self.class.published_version_class.all_versions_by_primary_key(primary_key_value)
+        end
+
+        def version(version_number)
+          self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
         end
 
         def take_down!
@@ -77,7 +81,7 @@ module Previewify
           return latest_published.published_attributes_excluding_primary_key != self.published_attributes_excluding_primary_key
         end
 
-        def revert_to_version!(version_number)
+        def revert_to_version_number!(version_number)
           version = self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
           update_attributes!(version.published_attributes_excluding_primary_key)
         end

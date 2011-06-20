@@ -340,8 +340,8 @@ describe 'Previewify' do
             @published_test_model_table.create
           end
 
-          it "has an integer version column by default" do
-            @published_test_model_table.should have_column("version", :integer)
+          it "has an integer version_number column by default" do
+            @published_test_model_table.should have_column("version_number", :integer)
           end
 
           it "has an primary_key column by default" do
@@ -398,14 +398,14 @@ describe 'Previewify' do
             retrieved_published_model.number.should == 5
           end
 
-          it "can not have its version attribute modified" do
-            original_version_number  = @published_model.version
-            @published_model.version = 10
+          it "can not have its version_number attribute modified" do
+            original_version_number  = @published_model.version_number
+            @published_model.version_number = 10
             @published_model.save!
 
             show_preview(false)
             retrieved_published_model = @test_model_class.find(@model.id)
-            retrieved_published_model.version.should == original_version_number
+            retrieved_published_model.version_number.should == original_version_number
           end
 
           it "#take_down! makes published version inaccessible" do
@@ -441,7 +441,7 @@ describe 'Previewify' do
           it "creates a published version of the object with same attributes as preview object and initial version" do
             model           = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             published_model = model.publish!
-            published_model.version.should == 1
+            published_model.version_number.should == 1
             model.attribute_names.each do |attribute_name|
               published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
             end
@@ -454,7 +454,7 @@ describe 'Previewify' do
             model.update_attributes(:name => 'Other Name', :number => 55)
             published_model = model.publish!
 
-            published_model.version.should == 2
+            published_model.version_number.should == 2
             model.attribute_names.each do |attribute_name|
               published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
             end
@@ -575,28 +575,28 @@ describe 'Previewify' do
 
         end
 
-        describe '#version' do
+        describe '#version_number' do
           before :each do
             @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
           end
 
           it "nil when unpublished" do
-            @model.version.should be_nil
+            @model.version_number.should be_nil
           end
 
           it "nil when taken down" do
             @model.publish!
             @model.take_down!
-            @model.version.should be_nil
+            @model.version_number.should be_nil
           end
 
-          it "reflects the latest published version" do
-            published_version1 = @model.publish!
-            @model.version.should == 1
-            published_version1.version.should == 1
-            published_version2 = @model.publish!
-            @model.version.should == 2
-            published_version2.version.should == 2
+          it "reflects the latest published version_number" do
+            published_version_number1 = @model.publish!
+            @model.version_number.should == 1
+            published_version_number1.version_number.should == 1
+            published_version_number2 = @model.publish!
+            @model.version_number.should == 2
+            published_version_number2.version_number.should == 2
           end
 
         end
@@ -930,9 +930,9 @@ describe 'Previewify' do
             it "returns all published versions" do
               versions = @model.versions
               versions.length.should == 2
-              versions[0].version.should == 1
+              versions[0].version_number.should == 1
               versions[0].number.should == 10
-              versions[1].version.should == 2
+              versions[1].version_number.should == 2
               versions[1].number.should == 20
             end
           end
@@ -940,12 +940,22 @@ describe 'Previewify' do
           describe "#revert_to_version" do
 
             it "reverts preview to specified version" do
-              @model.revert_to_version!(1)
+              @model.revert_to_version_number!(1)
               @model.number.should == 10
-              @model.revert_to_version!(2)
+              @model.revert_to_version_number!(2)
               @model.number.should == 20
             end
 
+          end
+
+
+          describe "#version" do
+
+            it "returns specified version" do
+              version1 = @model.version(1)
+              version1.version_number.should == 1
+              version1.number.should == 10
+            end
           end
         end
 
