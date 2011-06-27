@@ -591,12 +591,19 @@ describe 'Previewify' do
           end
 
           it "reflects the latest published version_number" do
-            published_version_number1 = @model.publish!
+            published_version1 = @model.publish!
             @model.version_number.should == 1
-            published_version_number1.version_number.should == 1
-            published_version_number2 = @model.publish!
+            published_version1.version_number.should == 1
+            published_version2 = @model.publish!
             @model.version_number.should == 2
-            published_version_number2.version_number.should == 2
+            published_version2.version_number.should == 2
+          end
+
+          it "continues where it left off after take-down and republish" do
+            @model.publish!
+            @model.take_down!
+            published_version2 = @model.publish!
+            published_version2.version_number.should == 2
           end
 
         end
@@ -927,7 +934,7 @@ describe 'Previewify' do
           end
 
           describe "#versions" do
-            it "returns all published versions" do
+            it "returns all published versions in order" do
               versions = @model.versions
               versions.length.should == 2
               versions[0].version_number.should == 1
@@ -956,6 +963,19 @@ describe 'Previewify' do
               version1.version_number.should == 1
               version1.number.should == 10
             end
+          end
+
+          describe "#last_published_version_number" do
+            it "should return published verion number" do
+              @model.last_published_version_number.should == @model.version_number
+            end
+
+            it "should return published verion number, even after take_down!" do
+              published_version_number_when_published = @model.version_number
+              @model.take_down!
+              @model.last_published_version_number.should == published_version_number_when_published
+            end
+
           end
         end
 

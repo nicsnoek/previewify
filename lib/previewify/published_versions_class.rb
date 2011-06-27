@@ -128,7 +128,7 @@ module Previewify
 
         def self.specific_version_by_primary_key(primary_key_value, version_number)
           with_exclusive_scope do
-            find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number])
+            find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number], :order => previewify_config.version_attribute_name)
           end
         end
 

@@ -53,10 +53,15 @@ module Previewify
           delegate_to_published_version ? published_version_class.send(*args) : super(*args)
         end
 
+        def last_published_version_number
+          last_published_version = versions.last
+          last_published_version.present? ? last_published_version.send(previewify_config.version_attribute_name) : 0
+        end
+
         def publish!
           raise ::Previewify::ActiveRecord::RecordNotPublished if new_record?
           latest_published = take_down!
-          latest_published_version = latest_published.present? ? latest_published.send(previewify_config.version_attribute_name) : 0
+          latest_published_version = latest_published.present? ? latest_published.send(previewify_config.version_attribute_name) : last_published_version_number
           self.class.published_version_class.publish(self, latest_published_version + 1)
         end
 
@@ -99,6 +104,7 @@ module Previewify
         end
 
         private
+
 
 
         def primary_key_value
