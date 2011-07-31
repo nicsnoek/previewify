@@ -1,1 +1,1 @@
-rvm gemset use previewify
+rvm --create use ruby-1.9.2-p290@previewify

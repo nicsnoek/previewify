@@ -4,6 +4,7 @@ require 'previewify'
 require 'timecop'
 require 'logger'
 
+
 ActiveRecord::Base.configurations = YAML::load(IO.read(File.expand_path('db/database.yml', File.dirname(__FILE__))))
 ActiveRecord::Base.establish_connection('test')
 
@@ -12,129 +13,13 @@ ActiveRecord::Base.logger.level = Logger::DEBUG
 
 require 'db/drop_published_versions'
 require 'db/schema'
+require 'models'
 
 
 describe 'Previewify' do
 
   def show_preview preview_mode
     Thread.current['Previewify::show_preview'] = preview_mode
-  end
-
-
-  class TestModel < ActiveRecord::Base
-
-    previewify
-
-    def some_method_for_both(some_value)
-      @some_value = some_value
-    end
-
-    def another_method_for_both
-      @some_value
-    end
-
-  end
-
-  class TestModelWithValidation < ActiveRecord::Base
-
-    validates_presence_of :name
-    validates_presence_of :extra_content
-
-    previewify :preview_only_attributes => [:extra_content]
-
-  end
-
-  class OtherPrimaryKeyTestModel < ActiveRecord::Base
-    set_primary_key 'other_pk'
-    previewify
-  end
-
-  class OtherPublishedClassNameTestModel < ActiveRecord::Base
-    previewify :published_version_class_name => 'PublishedModel'
-  end
-
-  class OtherPublishedFlagTestModel < ActiveRecord::Base
-    previewify :published_flag_attribute_name => 'currently_published'
-  end
-
-  class ExtraPreviewColumnsTestModel < ActiveRecord::Base
-    previewify :preview_only_attributes => [:extra_content, :more_extra_content]
-  end
-
-  class ExtraPreviewMethodTestModel < ActiveRecord::Base
-
-    def some_method_for_preview(some_value)
-      @some_value = some_value
-    end
-
-    def another_method_for_preview
-      @some_value
-    end
-
-    previewify :preview_only_methods => [:some_method_for_preview, :another_method_for_preview]
-  end
-
-  class ExtraPublishedMethodTestModel < ActiveRecord::Base
-
-    def some_method_for_published(some_value)
-      @some_value = some_value
-    end
-
-    def another_method_for_published
-      @some_value
-    end
-
-    previewify :published_only_methods => [:some_method_for_published, :another_method_for_published]
-
-  end
-
-  class OtherPublishedVersionPkTestModel < ActiveRecord::Base
-    previewify :published_version_primary_key_name => 'zippy_id'
-  end
-
-  def default_previewified
-    @test_model_class           = TestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_published_versions')
-  end
-
-  def default_previewified_with_validation
-    @test_model_class           = TestModelWithValidation
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'test_model_with_validation_published_versions')
-  end
-
-  def previewified_with_other_primary_key
-    @test_model_class           = OtherPrimaryKeyTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_primary_key_test_model_published_versions')
-  end
-
-  def previewified_with_other_published_flag
-    @test_model_class           = OtherPublishedFlagTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_flag_test_model_published_versions')
-  end
-
-  def previewified_with_preview_only_content
-    @test_model_class           = ExtraPreviewColumnsTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_preview_columns_test_model_published_versions')
-  end
-
-  def previewified_with_other_published_class_name
-    @test_model_class           = OtherPublishedClassNameTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_class_name_test_model_published_models')
-  end
-
-  def extra_preview_method_previewified
-    @test_model_class           = ExtraPreviewMethodTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_preview_method_test_model_published_versions')
-  end
-
-  def extra_published_method_previewified
-    @test_model_class           = ExtraPublishedMethodTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'extra_published_method_test_model_published_versions')
-  end
-
-  def other_published_version_pk_previewified
-    @test_model_class           = OtherPublishedVersionPkTestModel
-    @published_test_model_table = PublishedTestModelTable.new(@test_model_class, 'other_published_version_pk_test_model_published_versions', 'zippy_id')
   end
 
   it "preview only columns are not available on published object" do
@@ -174,18 +59,26 @@ describe 'Previewify' do
       @published_model = @model.publish!
     end
 
-    it "is available on preview version" do
+    it "is available on preview version (and working)" do
       @model.should respond_to :some_method_for_both
       @model.should respond_to :another_method_for_both
       @model.some_method_for_both("test value")
       @model.another_method_for_both.should == "test value"
     end
 
-    it "is available on published version" do
+    it "is available on published version (and working)" do
       @published_model.should respond_to :some_method_for_both
       @published_model.should respond_to :another_method_for_both
       @published_model.some_method_for_both("test value")
       @published_model.another_method_for_both.should == "test value"
+    end
+
+    it "does not share transient state between preview and published instances" do
+      @model.some_method_for_both("preview test value")
+      @published_model.some_method_for_both("published test value")
+
+      @model.another_method_for_both.should == "preview test value"
+      @published_model.another_method_for_both.should == "published test value"
     end
   end
 
@@ -203,7 +96,7 @@ describe 'Previewify' do
       @published_model = @model.publish!
     end
 
-    it "is only available on preview version" do
+    it "is available on preview version (and working)" do
       @model.should respond_to :some_method_for_preview
       @model.should respond_to :another_method_for_preview
       @model.some_method_for_preview("a test value")
@@ -235,7 +128,7 @@ describe 'Previewify' do
       @model.should_not respond_to :another_method_for_published
     end
 
-    it "is only available on published version" do
+    it "is available on published version (and working)" do
       @published_model.should respond_to :some_method_for_published
       @published_model.should respond_to :another_method_for_published
       @published_model.some_method_for_published("test argument value")
@@ -257,19 +150,22 @@ describe 'Previewify' do
     end
     describe "#publish!" do
       
-      it "should raise RecordNotPublished if the error is on a published attribute" do
+      it "should raise RecordNotPublished if there is a validation error on a published attribute" do
         @model.name = nil
         lambda {
           @model.publish!
         }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
       end
 
-      it "should raise RecordNotPublished if the error is on a unpublished attribute" do
+      it "should raise RecordNotPublished if there is a validation error on an unpublished attribute" do
         @model.extra_content = nil
-        @model.name = nil
         lambda {
           @model.publish!
         }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
+      end
+
+      it "should succeed if there are no validation errors" do
+        @model.publish!.should_not be_nil
       end
     end
   end
@@ -304,26 +200,6 @@ describe 'Previewify' do
       before :all do
         eval(previewified_type)
       end
-#    context "behaviour for default_previewified" do
-#
-#
-#      before :all do
-#        eval('previewified_with_other_primary_key')
-#      end
-
-      context "an unsaved model" do
-        it "should " do
-          model           = @test_model_class.new(
-              :name               => 'Original Name',
-              :number             => 5,
-              :content            => 'At least a litre',
-              :float              => 5.6,
-              :active             => false)
-          lambda {
-            model.publish!
-          }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
-        end
-      end
 
       describe ".create_published_versions_table" do
 
@@ -356,8 +232,6 @@ describe 'Previewify' do
               end
             end
           end
-
-
         end
       end
 
@@ -377,65 +251,24 @@ describe 'Previewify' do
           @published_test_model_table.create
         end
 
-        context "a published object" do
-
-          before :each do
-            @model           = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            @published_model_v1 = @model.publish!
-            @published_model_v2 = @model.publish!
-            @published_model_v2.take_down!
-            @published_model = @model.publish!
-          end
-
-          it "can not have its original attributes modified" do
-            @published_model.name   = 'Other Name'
-            @published_model.number = 42
-            @published_model.save!
-
-            show_preview(false)
-            retrieved_published_model = @test_model_class.find(@model.id)
-            retrieved_published_model.name.should == 'Original Name'
-            retrieved_published_model.number.should == 5
-          end
-
-          it "can not have its version_number attribute modified" do
-            original_version_number  = @published_model.version_number
-            @published_model.version_number = 10
-            @published_model.save!
-
-            show_preview(false)
-            retrieved_published_model = @test_model_class.find(@model.id)
-            retrieved_published_model.version_number.should == original_version_number
-          end
-
-          it "#take_down! makes published version inaccessible" do
-            @published_model.take_down!
-
-            show_preview(false)
-            lambda {
-              @test_model_class.find(@model.id)
-            }.should raise_error ActiveRecord::RecordNotFound
-          end
-
-          it ".specific_version_by_primary_key returns specified version" do
-            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model_v1
-          end
-
-          it ".all_versions_by_primary_key returns all versions" do
-            @published_model.class.all_versions_by_primary_key(@model.id).should == [@published_model_v1, @published_model_v2, @published_model]
-          end
-
-          it "#published_attributes only includes attributes published from preview object" do
-            published_attributes = @published_model.published_attributes
-            published_attributes.should_not have_key('published_id')
-          end
-
-        end
-
         describe "#publish!" do
 
           before :all do
             @published_test_model_table.create
+          end
+
+          context "an unsaved model" do
+            it "should raise RecordNotPublished" do
+              model           = @test_model_class.new(
+                  :name               => 'Original Name',
+                  :number             => 5,
+                  :content            => 'At least a litre',
+                  :float              => 5.6,
+                  :active             => false)
+              lambda {
+                model.publish!
+              }.should raise_error(::Previewify::ActiveRecord::RecordNotPublished)
+            end
           end
 
           it "creates a published version of the object with same attributes as preview object and initial version" do
@@ -632,11 +465,17 @@ describe 'Previewify' do
           end
         end
 
-        describe 'on preview model' do
+        describe 'a preview object' do
+
+          before :each do
+            @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+          end
+
+          it "is a preview object" do
+             @model.should be_preview_object
+          end
+
           describe '#has_unpublished_changes?' do
-            before :each do
-              @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            end
 
             it "false when unpublished" do
               @model.has_unpublished_changes?.should be_false
@@ -669,7 +508,66 @@ describe 'Previewify' do
           end
         end
 
-        describe 'on published model' do
+        context "a published object" do
+
+          before :each do
+            @model           = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            @published_model_v1 = @model.publish!
+            @published_model_v2 = @model.publish!
+            @published_model_v2.take_down!
+            @published_model = @model.publish!
+          end
+
+          it "is not a preview object" do
+             @published_model.should_not be_preview_object
+          end
+
+          it "can not have its original attributes modified" do
+            @published_model.name   = 'Other Name'
+            @published_model.number = 42
+            @published_model.save!
+
+            show_preview(false)
+            retrieved_published_model = @test_model_class.find(@model.id)
+            retrieved_published_model.name.should == 'Original Name'
+            retrieved_published_model.number.should == 5
+          end
+
+          it "can not have its version_number attribute modified" do
+            original_version_number  = @published_model.version_number
+            @published_model.version_number = 10
+            @published_model.save!
+
+            show_preview(false)
+            retrieved_published_model = @test_model_class.find(@model.id)
+            retrieved_published_model.version_number.should == original_version_number
+          end
+
+          it "#take_down! makes published version inaccessible" do
+            @published_model.take_down!
+
+            show_preview(false)
+            lambda {
+              @test_model_class.find(@model.id)
+            }.should raise_error ActiveRecord::RecordNotFound
+          end
+
+          it ".specific_version_by_primary_key returns specified version" do
+            @published_model.class.specific_version_by_primary_key(@model.id, 1).should == @published_model_v1
+          end
+
+          it ".all_versions_by_primary_key returns all versions" do
+            @published_model.class.all_versions_by_primary_key(@model.id).should == [@published_model_v1, @published_model_v2, @published_model]
+          end
+
+          it "#published_attributes only includes attributes published from preview object" do
+            published_attributes = @published_model.published_attributes
+            published_attributes.should_not have_key('published_id')
+          end
+
+        end
+
+        describe 'a published object' do
           describe '#has_unpublished_changes?' do
             before :each do
               @model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)

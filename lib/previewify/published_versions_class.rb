@@ -77,6 +77,10 @@ module Previewify
           false
         end
 
+        def preview_object?
+          false
+        end
+
         def with_published_id
           @with_published_id = true
           return yield

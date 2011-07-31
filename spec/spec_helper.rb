@@ -1,7 +1,7 @@
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 
-#require 'rspec'
+require 'rspec'
 require 'previewify'
 
 # Requires supporting files with custom matchers and macros, etc,
@@ -50,5 +50,7 @@ end
 def is_published?(name)
   @test_model_class.published_version_class.columns.include? name
 end
+
+
 
 
