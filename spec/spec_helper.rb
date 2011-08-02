@@ -47,7 +47,7 @@ class PublishedTestModelTable
 end
 
 
-def is_published?(name)
+def is_published_column?(name)
   @test_model_class.published_version_class.columns.include? name
 end
 

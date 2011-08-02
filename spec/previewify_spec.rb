@@ -15,12 +15,9 @@ require 'db/drop_published_versions'
 require 'db/schema'
 require 'models'
 
+include Previewify::Control
 
 describe 'Previewify' do
-
-  def show_preview preview_mode
-    Thread.current['Previewify::show_preview'] = preview_mode
-  end
 
   it "preview only columns are not available on published object" do
     previewified_with_preview_only_content
@@ -226,7 +223,7 @@ describe 'Previewify' do
 
           it "has all published columns of the draft version" do
             @test_model_class.columns.each do |column|
-              if is_published? column.name
+              if is_published_column? column.name
                 @published_test_model_table.should have_column(column.name)
                 @published_test_model_table.column_type(column.name).should == column.type
               end
@@ -249,6 +246,30 @@ describe 'Previewify' do
 
         before :all do
           @published_test_model_table.create
+        end
+
+        describe "#id" do
+          it "should be the same on preview and all published versions" do
+            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            published_model1 = model.publish!
+            published_model2 = model.publish!
+            #Note: This shows that there is something suspect about the published model: All versions have the same id! This is because they
+            #should all be able to masquerade as the preview version. They all have a different "published_id"
+            published_model1.id.should == model.id
+            published_model2.id.should == model.id
+          end
+
+          it "should be the same on preview and all published versions even if take down has a problem" do
+            begin
+            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
+            published_model = model.publish!
+            published_model.stub(:create_or_update).and_raise(RuntimeError)
+            published_model.take_down!
+            ::RSpec::Expectations.fail_with("Should have thrown an exception")
+            rescue RuntimeError => e
+              published_model.id.should == model.id
+            end
+          end
         end
 
         describe "#publish!" do
@@ -276,7 +297,7 @@ describe 'Previewify' do
             published_model = model.publish!
             published_model.version_number.should == 1
             model.attribute_names.each do |attribute_name|
-              published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
+              published_model.send(attribute_name).should == model.send(attribute_name) if is_published_column?(attribute_name)
             end
           end
 
@@ -289,7 +310,7 @@ describe 'Previewify' do
 
             published_model.version_number.should == 2
             model.attribute_names.each do |attribute_name|
-              published_model.send(attribute_name).should == model.send(attribute_name) if is_published?(attribute_name)
+              published_model.send(attribute_name).should == model.send(attribute_name) if is_published_column?(attribute_name)
             end
           end
 
@@ -302,17 +323,17 @@ describe 'Previewify' do
 
           it "does nothing on unpublished object" do
             model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            model.published?.should be_false
+            model.should_not be_published
             model.take_down!
-            model.published?.should be_false
+            model.should_not be_published
           end
 
           it "causes currently published object to become unpublished" do
             model = @test_model_class.create!(:name => 'My Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
             model.publish!
-            model.published?.should be_true
+            model.should be_published
             model.take_down!
-            model.published?.should be_false
+            model.should_not be_published
           end
 
         end
@@ -401,7 +422,7 @@ describe 'Previewify' do
           end
 
           it "false when taken down after publishing" do
-            published_model = @model.publish!
+            @model.publish!
             @model.take_down!
             @model.published?.should be_false
           end
@@ -439,30 +460,6 @@ describe 'Previewify' do
             published_version2.version_number.should == 2
           end
 
-        end
-
-        describe "#id" do
-          it "should be the same on preview and all published versions" do
-            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            published_model1 = model.publish!
-            published_model2 = model.publish!
-            #Note: This shows that there is something suspect about the published model: All versions have the same id! This is because they
-            #should all be able to masquerade as the preview version. They all have a different "published_id"
-            published_model1.id.should == model.id
-            published_model2.id.should == model.id
-          end
-
-          it "should be the same on preview and all published versions even if take down has a problem" do
-            begin
-            model = @test_model_class.create!(:name => 'Original Name', :number => 5, :content => 'At least a litre', :float => 5.6, :active => false)
-            published_model = model.publish!
-            published_model.stub(:create_or_update).and_raise(RuntimeError)
-            published_model.take_down!
-            ::RSpec::Expectations.fail_with("Should have thrown an exception")
-            rescue RuntimeError => e
-              published_model.id.should == model.id
-            end
-          end
         end
 
         describe 'a preview object' do
