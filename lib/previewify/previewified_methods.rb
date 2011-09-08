@@ -7,6 +7,30 @@ module Previewify
 
       target.class_eval do
 
+        class << self
+
+          def find(*args)
+            if delegate_to_published_version
+              published_version_class.find(*args)
+            else
+              super(*args)
+            end
+          end
+
+          # Overrides method in active_record/named_scope.rb, this allows most queries to switch over to
+          # published_version_class when appropriate.
+          def scoped(options = nil)
+            delegate_to_published_version ? published_version_class.scoped(options) : super(options)
+          end
+
+          private
+
+          def delegate_to_published_version
+            !Control.show_preview? && self != published_version_class
+          end
+
+        end
+
         delegate previewify_config.published_on_attribute_name, :to => :latest_published, :allow_nil => true
         delegate previewify_config.version_attribute_name, :to => :latest_published, :allow_nil => true
 
@@ -16,45 +40,6 @@ module Previewify
 
         def preview_object?
           true
-        end
-
-        def self.all(*args)
-          delegate_to_published_version ? published_version_class.all(*args) : super(*args)
-        end
-
-        def self.find(*args)
-          if !delegate_to_published_version
-            super(*args)
-          else
-            found = super(*args)
-            raise ::ActiveRecord::RecordNotFound if args_is_ids(args) && !has_latest_published(found)
-            return nil unless found.present?
-            latest_published_from(found)
-          end
-        end
-
-        def self.args_is_ids(args)
-          !(args.last.is_a?(Hash) && args.last.extractable_options?)
-        end
-
-        def self.latest_published_from(result)
-          if result.is_a? Array
-            result.map(&:latest_published).compact
-          else
-            result.latest_published
-          end
-        end
-
-        def self.has_latest_published(result)
-          if result.is_a? Array
-            result.all?{|item| item.latest_published.present?}
-          else
-            result.latest_published.present?
-          end
-        end
-
-        def self.method_missing(*args)
-          delegate_to_published_version ? published_version_class.send(*args) : super(*args)
         end
 
         def last_published_version_number
@@ -74,7 +59,8 @@ module Previewify
         end
 
         def version(version_number)
-          self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
+          #self.class.published_version_class.all_versions_by_primary_key(primary_key_value).where("#{previewify_config.version_attribute_name}" => version_number)
+          self.class.published_version_class.version_by_primary_key(primary_key_value, version_number)
         end
 
         def take_down!
@@ -91,7 +77,7 @@ module Previewify
         end
 
         def revert_to_version_number!(version_number)
-          version = self.class.published_version_class.specific_version_by_primary_key(primary_key_value, version_number)
+          version = self.class.published_version_class.version_by_primary_key(primary_key_value, version_number)
           update_attributes!(version.published_attributes_excluding_primary_key)
         end
 
@@ -109,16 +95,10 @@ module Previewify
 
         private
 
-
-
         def primary_key_value
 #          primary_key_name = self.class.previewify_config.primary_key_attribute_name
           self.send(:id)
           #Note: ActiveRecord always maps pk to id
-        end
-
-        def self.delegate_to_published_version
-          !Control.show_preview? && self != published_version_class
         end
 
       end

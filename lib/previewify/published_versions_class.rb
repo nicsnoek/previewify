@@ -18,11 +18,12 @@ module Previewify
           }
         end
 
-        public
-
-        set_table_name(previewify_config.published_version_table_name)
-        set_primary_key(previewify_config.published_version_primary_key_name)
-
+        def self.uninherit_preview_methods_for_published_attributes
+          # Uninherit methods from the preview version that delegate to attributes of the published version
+          # otherwise they will cause infinite recursion.
+          undef_method(previewify_config.version_attribute_name)
+          undef_method(previewify_config.published_on_attribute_name)
+        end
 
         def self.perform_class_initialisation_that_requires_table_to_exist
           #If this setup can not run because the table does not exits yet, it must be run after the table is created.
@@ -32,16 +33,9 @@ module Previewify
           end
         end
 
-        def self.uninherit_preview_methods_for_published_attributes
-        # Uninherit methods from the preview version that delegate to attributes of the published version
-        # otherwise they will cause infinite recursion.
-          undef_method(previewify_config.version_attribute_name)
-          undef_method(previewify_config.published_on_attribute_name)
-        end
-
-
+        set_table_name(previewify_config.published_version_table_name)
+        set_primary_key(previewify_config.published_version_primary_key_name)
         perform_class_initialisation_that_requires_table_to_exist()
-
         uninherit_preview_methods_for_published_attributes()
 
         if previewify_config.preview_only_method_names.present?
@@ -58,6 +52,8 @@ module Previewify
             end
           end
         end
+
+        public
 
         def take_down!
           update_attribute(previewify_config.published_flag_attribute_name, false)
@@ -104,48 +100,101 @@ module Previewify
 
         alias_method_chain :save, :published_id
 
-        def self.publish(preview, version)
-          raise(RecordNotPublished) unless preview.valid?
-          attributes_to_publish = preview.published_attributes
-          attributes_to_publish.merge!(
+        class << self
+
+          def publish(preview, version)
+            raise(RecordNotPublished) unless preview.valid?
+            attributes_to_publish = preview.published_attributes
+            attributes_to_publish.merge!(
                 previewify_config.version_attribute_name => version,
-              previewify_config.published_flag_attribute_name => true,
-              previewify_config.published_on_attribute_name => Time.now
-          )
+                previewify_config.published_flag_attribute_name => true,
+                previewify_config.published_on_attribute_name => Time.now
+            )
 
-          instance = self.new(attributes_to_publish)
-          #primary key is never mass assigned, so do it separately:
-          instance.send(previewify_config.mapped_primary_key_name.to_s+'=', attributes_to_publish[previewify_config.primary_key_name])
-          instance.save || raise(RecordNotPublished)
-          return instance
-        end
+            instance = self.new(attributes_to_publish)
+            #primary key is never mass assigned, so do it separately:
+            instance.send(previewify_config.mapped_primary_key_name.to_s+'=', attributes_to_publish[previewify_config.primary_key_name])
+            instance.save || raise(RecordNotPublished)
+            return instance
+          end
 
-        def self.take_down(pk_to_take_down)
-          take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
-          take_down_candidate.try(:take_down!)
-          return take_down_candidate
-        end
+          def take_down(pk_to_take_down)
+            take_down_candidate = latest_published_by_primary_key(pk_to_take_down)
+            take_down_candidate.try(:take_down!)
+            return take_down_candidate
+          end
 
-        def self.latest_published_by_primary_key(primary_key_value)
-          find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
-        end
+          def latest_published_by_primary_key(primary_key_value)
+            first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
+          end
 
-        def self.specific_version_by_primary_key(primary_key_value, version_number)
-          with_exclusive_scope do
-            find(:first, :conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number], :order => previewify_config.version_attribute_name)
+          def version_by_primary_key(primary_key_value, version_number)
+            with_exclusive_scope do
+              first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number], :order => previewify_config.version_attribute_name)
+            end
+          end
+
+          def all_versions_by_primary_key(primary_key_value)
+            with_exclusive_scope do
+              all(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
+            end
+          end
+
+          def find_with_special_case_for_id(*args)
+            case args.first
+              when :first, :last, :all
+                super(*args)
+              else
+                if args.first.kind_of?(Hash)
+                  return super(*args)
+                end
+                if args.first.kind_of?(Array)
+                  return by_ids(args.first)
+                end
+                if args.length > 1
+                  return by_ids(args)
+                else
+                  return by_id(args.first)
+                end
+            end
+          end
+
+          private
+
+          def find_with_special_case_for_id(*args)
+            case args.first
+              when :first, :last, :all
+                return find_without_special_case_for_id(*args)
+              else
+                if args.first.kind_of?(Hash)
+                  return find_without_special_case_for_id(*args)
+                end
+                if args.first.kind_of?(Array)
+                  return by_ids(args.first)
+                end
+                if args.length > 1
+                  return by_ids(args)
+                else
+                  return by_id(args.first)
+                end
+            end
+          end
+
+          alias_method_chain :find, :special_case_for_id
+
+          def by_ids(ids)
+            found = all(:conditions => ["#{previewify_config.mapped_primary_key_name} in (?)", ids])
+            raise ::ActiveRecord::RecordNotFound if found.length != ids.length
+            return found
+          end
+
+          def by_id(id)
+            found = first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", id])
+            raise ::ActiveRecord::RecordNotFound unless found.present?
+            return found
           end
         end
-
-        def self.all_versions_by_primary_key(primary_key_value)
-          with_exclusive_scope do
-            find(:all, :conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
-          end
-        end
-
       end
-
     end
-
-
   end
 end
