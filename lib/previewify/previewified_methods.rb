@@ -59,7 +59,6 @@ module Previewify
         end
 
         def version(version_number)
-          #self.class.published_version_class.all_versions_by_primary_key(primary_key_value).where("#{previewify_config.version_attribute_name}" => version_number)
           self.class.published_version_class.version_by_primary_key(primary_key_value, version_number)
         end
 
@@ -77,8 +76,7 @@ module Previewify
         end
 
         def revert_to_version_number!(version_number)
-          version = self.class.published_version_class.version_by_primary_key(primary_key_value, version_number)
-          update_attributes!(version.published_attributes_excluding_primary_key)
+          update_attributes!(version(version_number).published_attributes_excluding_primary_key)
         end
 
         def published_attributes

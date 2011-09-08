@@ -125,37 +125,16 @@ module Previewify
           end
 
           def latest_published_by_primary_key(primary_key_value)
-            first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
+            where(previewify_config.mapped_primary_key_name => primary_key_value).first
           end
 
           def version_by_primary_key(primary_key_value, version_number)
-            with_exclusive_scope do
-              first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ? AND #{previewify_config.version_attribute_name} = ?", primary_key_value, version_number], :order => previewify_config.version_attribute_name)
-            end
+            all_versions_by_primary_key(primary_key_value).where(previewify_config.version_attribute_name => version_number).first
           end
 
           def all_versions_by_primary_key(primary_key_value)
             with_exclusive_scope do
-              all(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", primary_key_value])
-            end
-          end
-
-          def find_with_special_case_for_id(*args)
-            case args.first
-              when :first, :last, :all
-                super(*args)
-              else
-                if args.first.kind_of?(Hash)
-                  return super(*args)
-                end
-                if args.first.kind_of?(Array)
-                  return by_ids(args.first)
-                end
-                if args.length > 1
-                  return by_ids(args)
-                else
-                  return by_id(args.first)
-                end
+              where(previewify_config.mapped_primary_key_name => primary_key_value)
             end
           end
 
@@ -166,30 +145,23 @@ module Previewify
               when :first, :last, :all
                 return find_without_special_case_for_id(*args)
               else
-                if args.first.kind_of?(Hash)
-                  return find_without_special_case_for_id(*args)
-                end
-                if args.first.kind_of?(Array)
-                  return by_ids(args.first)
-                end
-                if args.length > 1
-                  return by_ids(args)
-                else
-                  return by_id(args.first)
-                end
+                return find_without_special_case_for_id(*args) if args.first.kind_of?(Hash)
+                return by_ids(args.first) if args.first.kind_of?(Array)
+                return by_ids(args) if args.length > 1
+                return by_id(args.first)
             end
           end
 
           alias_method_chain :find, :special_case_for_id
 
           def by_ids(ids)
-            found = all(:conditions => ["#{previewify_config.mapped_primary_key_name} in (?)", ids])
+            found = where(previewify_config.mapped_primary_key_name => ids)
             raise ::ActiveRecord::RecordNotFound if found.length != ids.length
             return found
           end
 
           def by_id(id)
-            found = first(:conditions => ["#{previewify_config.mapped_primary_key_name} = ?", id])
+            found = where(previewify_config.mapped_primary_key_name => id).first
             raise ::ActiveRecord::RecordNotFound unless found.present?
             return found
           end
