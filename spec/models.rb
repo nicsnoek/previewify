@@ -12,6 +12,12 @@ class TestModel < ActiveRecord::Base
 
 end
 
+class TestModelWithTimestamp < ActiveRecord::Base
+
+  previewify
+
+end
+
 class TestModelWithValidation < ActiveRecord::Base
 
   validates_presence_of :name

@@ -182,6 +182,102 @@ describe 'Previewify' do
     end
   end
 
+  describe ".most_recent" do
+
+    context "without timestamps" do
+      before :each do
+
+        TestModel.create_published_versions_table
+
+        @model1 = TestModel.create!(:name => 'My Name', :number => 1, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model2 = TestModel.create!(:name => 'My Name', :number => 2, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model3 = TestModel.create!(:name => 'My Name', :number => 1, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model1.update_attribute(:name, 'Other Name') #Note: This will have no effect in ordering
+      end
+
+      context "in preview mode" do
+
+        before :each do
+          show_preview(true)
+        end
+
+        it "should return by modification id descending" do
+          TestModel.most_recent.should == [@model3, @model2, @model1]
+        end
+
+        it "should return refined search by modification date/time descending" do
+          TestModel.most_recent.where(:number => 1).should == [@model3, @model1]
+        end
+      end
+
+      context "in live mode" do
+
+        before :each do
+          @published_model3 = @model3.publish!
+          @published_model2 = @model2.publish!
+          @published_model1 = @model1.publish!
+          show_preview(false)
+        end
+
+        it "should return by publication date/time descending" do
+          TestModel.most_recent.should == [@published_model1, @published_model2, @published_model3]
+        end
+
+        it "should return refined search by publication date/time descending" do
+          TestModel.most_recent.where(:number => 1).should == [@published_model1, @published_model3]
+        end
+      end
+    end
+
+    context "with timestamps" do
+      before :each do
+
+        TestModelWithTimestamp.create_published_versions_table
+
+        @model1 = TestModelWithTimestamp.create!(:name => 'My Name', :number => 1, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model2 = TestModelWithTimestamp.create!(:name => 'My Name', :number => 2, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model3 = TestModelWithTimestamp.create!(:name => 'My Name', :number => 1, :content => 'At least a litre', :float => 5.6, :active => false)
+        @model1.update_attribute(:name, 'Other Name')
+      end
+
+      context "in preview mode" do
+
+        before :each do
+          show_preview(true)
+        end
+
+        it "should return by modification date/time descending" do
+          TestModelWithTimestamp.most_recent.should == [@model1, @model3, @model2]
+        end
+
+        it "should return refined search by modification date/time descending" do
+          TestModelWithTimestamp.most_recent.where(:number => 1).should == [@model1, @model3]
+        end
+      end
+
+      context "in live mode" do
+
+        before :each do
+          @published_model3 = @model3.publish!
+          @published_model2 = @model2.publish!
+          @published_model1 = @model1.publish!
+          show_preview(false)
+        end
+
+        it "should return by publication date/time descending" do
+          TestModelWithTimestamp.most_recent.should == [@published_model1, @published_model2, @published_model3]
+        end
+
+        it "should return refined search by publication date/time descending" do
+          TestModelWithTimestamp.most_recent.where(:number => 1).should == [@published_model1, @published_model3]
+        end
+      end
+    end
+
+  end
+
+
+
   ["default_previewified",
    "previewified_with_other_primary_key",
    "previewified_with_other_published_flag",

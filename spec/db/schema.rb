@@ -8,6 +8,15 @@ ActiveRecord::Schema.define :version => 0 do
     t.boolean :active
   end
 
+  create_table :test_model_with_timestamps, :force => true do |t|
+    t.string :name
+    t.integer :number
+    t.text :content
+    t.float :float
+    t.boolean :active
+    t.timestamps
+  end
+
   create_table :test_model_with_validations, :force => true do |t|
     t.string :name
     t.integer :number

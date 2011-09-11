@@ -23,6 +23,18 @@ module Previewify
             delegate_to_published_version ? published_version_class.scoped(options) : super(options)
           end
 
+          def most_recent
+            if delegate_to_published_version
+              scoped.order("#{previewify_config.published_on_attribute_name} desc")
+            else
+              if column_names.include?("updated_at")
+                scoped.order("updated_at desc")
+              else
+                scoped.order("#{previewify_config.primary_key_name} desc")
+              end
+            end
+          end
+
           private
 
           def delegate_to_published_version
