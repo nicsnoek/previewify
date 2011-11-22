@@ -213,8 +213,10 @@ describe 'Previewify' do
       context "in live mode" do
 
         before :each do
+          @model1.publish!
           @published_model3 = @model3.publish!
           @published_model2 = @model2.publish!
+          @model1.update_attribute(:content, 'A bag of tricks')
           @published_model1 = @model1.publish!
           show_preview(false)
         end
@@ -258,7 +260,9 @@ describe 'Previewify' do
       context "in live mode" do
 
         before :each do
+          @model2.publish!
           @published_model3 = @model3.publish!
+          @model2.update_attribute(:content, 'A Bag of Money')
           @published_model2 = @model2.publish!
           @published_model1 = @model1.publish!
           show_preview(false)
